@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/P2IP.iml" filepath="$PROJECT_DIR$/P2IP.iml" />
+      <module fileurl="file://$PROJECT_DIR$/MemoGuide.iml" filepath="$PROJECT_DIR$/MemoGuide.iml" />
     </modules>
   </component>
 </project>
