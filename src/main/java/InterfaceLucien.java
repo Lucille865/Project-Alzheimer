@@ -13,6 +13,9 @@ import java.time.format.DateTimeFormatter;
 
 public class InterfaceLucien extends Application {
 
+    private HistoriqueManager historiqueManager;
+    private DashboardServeur  dashboardServeur;
+
     // ── Palette ──────────────────────────────────────────────────────────────
     private static final String C_FOND    = "#0d1117";
     private static final String C_CARTE   = "#161b22";
@@ -45,6 +48,9 @@ public class InterfaceLucien extends Application {
     @Override
     public void start(Stage stage) {
         tacheManager = new TacheManager();
+        historiqueManager = new HistoriqueManager();
+        dashboardServeur  = new DashboardServeur(tacheManager, historiqueManager);
+        dashboardServeur.demarrer();
 
         // ── Header ────────────────────────────────────────────────────────────
         labelHeure = creerLabel("00:00:00", 60, true, C_TEXTE);
@@ -273,6 +279,8 @@ public class InterfaceLucien extends Application {
     private void actionValidation() {
         if (tacheEnCours == null || tacheEnCours.isEstValidee()) return;
         tacheEnCours.valider();
+        boolean enRetard = tacheEnCours.doitDeclenchemerRappel(LocalTime.now().plusMinutes(offsetMinutes));
+        historiqueManager.enregistrerValidation(tacheEnCours, enRetard);
 
         ScaleTransition pulse = new ScaleTransition(Duration.millis(140), btnOui);
         pulse.setFromX(1.0); pulse.setFromY(1.0);
@@ -328,4 +336,9 @@ public class InterfaceLucien extends Application {
     }
 
     public static void main(String[] args) { launch(args); }
+
+    @Override
+    public void stop() {
+        if (dashboardServeur != null) dashboardServeur.arreter();
+    }
 }
