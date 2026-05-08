@@ -11,6 +11,10 @@ import javafx.util.Duration;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 
+import com.fazecast.jSerialComm.SerialPort; // Ajoute l'import
+import javafx.application.Platform; // Important pour modifier l'UI depuis un Thread
+
+
 public class InterfaceLucien extends Application {
 
     private HistoriqueManager historiqueManager;
@@ -43,7 +47,10 @@ public class InterfaceLucien extends Application {
     private Label       labelProgres;
     private Label       labelOffsetInfo;
     private ProgressBar progressBar;
+
+    // ── Communication Arduino ─────────────────────────────────────────────────────────
     private Button      btnOui;
+    private SerialPort comPort;
 
     @Override
     public void start(Stage stage) {
@@ -51,6 +58,7 @@ public class InterfaceLucien extends Application {
         historiqueManager = new HistoriqueManager();
         dashboardServeur  = new DashboardServeur(tacheManager, historiqueManager);
         dashboardServeur.demarrer();
+        //connecterArduino("COM4");
 
         // ── Header ────────────────────────────────────────────────────────────
         labelHeure = creerLabel("00:00:00", 60, true, C_TEXTE);
@@ -176,6 +184,17 @@ public class InterfaceLucien extends Application {
         stage.setFullScreen(true);
         stage.show();
 
+        stage.setOnCloseRequest(e -> {
+            System.out.println("Fermeture demandée par l'utilisateur...");
+            stop();
+            Platform.exit(); // Force JavaFX à appeler la méthode stop() proprement
+        });
+
+        // On attend 1 seconde avant de connecter l'Arduino
+        PauseTransition pause = new PauseTransition(Duration.seconds(5));
+        pause.setOnFinished(e -> connecterArduino("COM4"));
+        pause.play();
+
         demarrerHorloge();
     }
 
@@ -210,6 +229,12 @@ public class InterfaceLucien extends Application {
                 Tache t = active.get();
                 tacheEnCours = t;
 
+                if (comPort != null && comPort.isOpen()) {
+                    String signal = t.isEstValidee() ? "V" : "R";
+                    byte[] data = signal.getBytes();
+                    comPort.writeBytes(data, data.length);
+                }
+
                 labelTache.setText(t.getNom());
                 labelPlage.setText("🕐 " + t.getPlageHoraire());
 
@@ -223,6 +248,10 @@ public class InterfaceLucien extends Application {
                     }
                 }
             } else {
+                // Si pas de tâche, on éteint tout
+                if (comPort != null && comPort.isOpen()) {
+                    comPort.writeBytes("X".getBytes(), 1);
+                }
                 tacheEnCours = null;
                 labelTache.setText("Pas de tâche\npour l'instant 😊");
                 labelPlage.setText("");
@@ -340,5 +369,56 @@ public class InterfaceLucien extends Application {
     @Override
     public void stop() {
         if (dashboardServeur != null) dashboardServeur.arreter();
+        if (comPort != null && comPort.isOpen()) {
+            comPort.closePort();
+            System.out.println("[Matériel] Port COM fermé proprement.");
+        }
+    }
+
+    private void connecterArduino(String portName) {
+        // On vérifie d'abord si la classe existe pour éviter le crash au chargement
+        //Class.forName("com.fazecast.jSerialComm.SerialPort");
+        //try {
+        System.out.println("--- Liste des ports détectés ---");
+        for (SerialPort p : SerialPort.getCommPorts()) {
+            System.out.println("Port trouvé : " + p.getSystemPortName());
+        }
+        System.out.println("-------------------------------");
+        comPort = SerialPort.getCommPort(portName);
+        comPort.setBaudRate(115200);
+        if (comPort.openPort()) {
+            System.out.println("[Matériel] Arduino connecté !");
+            // On écoute le bouton
+            comPort.addDataListener(new com.fazecast.jSerialComm.SerialPortDataListener() {
+
+                @Override
+                public int getListeningEvents() {
+                    return SerialPort.LISTENING_EVENT_DATA_AVAILABLE;
+                }
+
+                @Override
+                public void serialEvent(com.fazecast.jSerialComm.SerialPortEvent event) {
+                    if (event.getEventType() != SerialPort.LISTENING_EVENT_DATA_AVAILABLE) return;
+                    byte[] newData = new byte[comPort.bytesAvailable()];
+                    int numRead = comPort.readBytes(newData, newData.length);
+                    String msg = new String(newData).trim();
+                    System.out.println("[DEBUG USB] Reçu de l'Arduino : " + msg);
+
+                    if (msg.contains("BTN_ROUGE")) {
+                    // Crucial : Platform.runLater permet de cliquer sur le bouton
+                    // depuis un autre thread que celui de l'UI JavaFX
+                        Platform.runLater(() -> actionValidation());
+                    }
+                }
+            });
+        } else {
+            System.err.println("[Matériel] Impossible d'ouvrir le port " + portName);
+        }
+        //} catch (Throwable t) {
+        // Throwable attrape aussi les Error comme UnsatisfiedLinkError
+        //System.err.println("[ERREUR CRITIQUE] Pilote USB incompatible : " + t.getMessage());
+        //System.err.println("L'application continue sans Arduino.");
+        //}
+
     }
 }
