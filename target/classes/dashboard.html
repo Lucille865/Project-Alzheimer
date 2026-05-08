@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>MémoGuide — Suivi de Lucien</title>
+    <style>
+        :root {
+          --fond:    #0d1117;
+          --carte:   #161b22;
+          --bordure: #30363d;
+          --texte:   #e6edf3;
+          --subtil:  #8b949e;
+          --vert:    #3fb950;
+          --rouge:   #f85149;
+          --orange:  #d29922;
+          --bleu:    #388bfd;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+          background: var(--fond);
+          color: var(--texte);
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          min-height: 100vh;
+          padding: 32px 20px;
+        }
+
+        /* ── Header ── */
+        .header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          max-width: 900px;
+          margin: 0 auto 32px;
+          flex-wrap: wrap;
+          gap: 12px;
+        }
+        .header h1 { font-size: 28px; }
+        .header h1 span { color: var(--bleu); }
+        .badge-live {
+          background: var(--vert);
+          color: #000;
+          font-size: 13px;
+          font-weight: 700;
+          padding: 4px 12px;
+          border-radius: 20px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .badge-live::before {
+          content: "";
+          width: 8px; height: 8px;
+          background: #000;
+          border-radius: 50%;
+          animation: pulse 1.2s infinite;
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50%       { opacity: 0.3; }
+        }
+
+        /* ── Grille principale ── */
+        .grille {
+          max-width: 900px;
+          margin: 0 auto;
+          display: grid;
+          gap: 20px;
+          grid-template-columns: 1fr 1fr;
+        }
+        @media (max-width: 640px) { .grille { grid-template-columns: 1fr; } }
+
+        .carte {
+          background: var(--carte);
+          border: 1px solid var(--bordure);
+          border-radius: 16px;
+          padding: 24px;
+        }
+        .carte.pleine-largeur { grid-column: 1 / -1; }
+
+        .titre-section {
+          font-size: 13px;
+          color: var(--subtil);
+          text-transform: uppercase;
+          letter-spacing: .08em;
+          margin-bottom: 16px;
+        }
+
+        /* ── Jauge du jour ── */
+        .jauge-container { display: flex; align-items: center; gap: 16px; }
+        .jauge-cercle {
+          width: 90px; height: 90px;
+          flex-shrink: 0;
+        }
+        .jauge-cercle svg { transform: rotate(-90deg); }
+        .jauge-texte { text-align: center; position: relative; }
+        .pct-grand { font-size: 36px; font-weight: 700; }
+        .pct-label { font-size: 13px; color: var(--subtil); }
+        .valide-count { font-size: 15px; color: var(--subtil); margin-top: 8px; }
+
+        /* ── Liste tâches du jour ── */
+        .liste-taches { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+        .item-tache {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 14px;
+          border-radius: 10px;
+          background: #0d1117;
+          border: 1px solid var(--bordure);
+        }
+        .pastille {
+          width: 12px; height: 12px;
+          border-radius: 50%;
+          flex-shrink: 0;
+        }
+        .pastille.vert  { background: var(--vert); }
+        .pastille.rouge { background: var(--rouge); }
+        .item-tache-nom  { flex: 1; font-size: 15px; }
+        .item-tache-plage { font-size: 13px; color: var(--subtil); }
+
+        /* ── Graphique 7 jours ── */
+        .graphique {
+          display: flex;
+          align-items: flex-end;
+          gap: 10px;
+          height: 120px;
+          padding-top: 8px;
+        }
+        .barre-colonne {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 6px;
+          height: 100%;
+          justify-content: flex-end;
+        }
+        .barre {
+          width: 100%;
+          border-radius: 6px 6px 0 0;
+          min-height: 4px;
+          transition: height .4s ease;
+          position: relative;
+        }
+        .barre:hover::after {
+          content: attr(data-tooltip);
+          position: absolute;
+          bottom: 110%;
+          left: 50%;
+          transform: translateX(-50%);
+          background: #2d333b;
+          color: var(--texte);
+          font-size: 12px;
+          padding: 4px 8px;
+          border-radius: 6px;
+          white-space: nowrap;
+          pointer-events: none;
+        }
+        .barre-label {
+          font-size: 12px;
+          color: var(--subtil);
+          text-align: center;
+        }
+
+        /* ── Journal événements ── */
+        .journal { display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; }
+        .evt {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 10px 12px;
+          background: #0d1117;
+          border-radius: 8px;
+          font-size: 14px;
+        }
+        .evt-heure { color: var(--subtil); font-size: 13px; min-width: 56px; }
+        .evt-nom   { flex: 1; }
+        .evt-badge {
+          font-size: 12px;
+          padding: 2px 8px;
+          border-radius: 10px;
+          font-weight: 600;
+        }
+        .evt-badge.ok      { background: #1a3a22; color: var(--vert); }
+        .evt-badge.retard  { background: #3a1a1a; color: var(--rouge); }
+
+        /* ── Mise à jour ── */
+        .derniere-maj {
+          max-width: 900px;
+          margin: 16px auto 0;
+          font-size: 13px;
+          color: var(--subtil);
+          text-align: right;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>Suivi de <span>Lucien</span></h1>
+    <div class="badge-live">En direct</div>
+</div>
+
+<div class="grille">
+
+    <!-- Carte : résumé du jour -->
+    <div class="carte">
+        <p class="titre-section">Aujourd'hui</p>
+        <div class="jauge-container">
+            <div class="jauge-cercle">
+                <svg viewBox="0 0 36 36" width="90" height="90">
+                    <circle cx="18" cy="18" r="15.9"
+                            fill="none" stroke="#30363d" stroke-width="3.2"/>
+                    <circle id="jauge-arc" cx="18" cy="18" r="15.9"
+                            fill="none" stroke="#3fb950" stroke-width="3.2"
+                            stroke-dasharray="0 100" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <div>
+                <div class="pct-grand" id="pct-jour">0%</div>
+                <div class="pct-label">des tâches faites</div>
+                <div class="valide-count" id="count-jour">0 / 0 tâches</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Carte : tâches du jour -->
+    <div class="carte">
+        <p class="titre-section">Tâches du jour</p>
+        <ul class="liste-taches" id="liste-taches"></ul>
+    </div>
+
+    <!-- Carte : graphique 7 jours (pleine largeur) -->
+    <div class="carte pleine-largeur">
+        <p class="titre-section">Progression des 7 derniers jours</p>
+        <div class="graphique" id="graphique-7j"></div>
+    </div>
+
+    <!-- Carte : journal des validations -->
+    <div class="carte pleine-largeur">
+        <p class="titre-section">Journal des validations — aujourd'hui</p>
+        <div class="journal" id="journal"></div>
+    </div>
+
+</div>
+
+<p class="derniere-maj">Mise à jour automatique toutes les 5 secondes —
+    dernière : <span id="heure-maj">—</span></p>
+
+<script>
+    const JOURS_COURTS = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
+
+    async function chargerDonnees() {
+      try {
+        const r    = await fetch("/api/data");
+        const data = await r.json();
+        rendreDashboard(data);
+        document.getElementById("heure-maj").textContent =
+          new Date().toLocaleTimeString("fr-FR");
+      } catch (e) {
+        console.error("Erreur chargement :", e);
+      }
+    }
+
+    function rendreDashboard(data) {
+      const auj = data.aujourd_hui;
+
+      // ── Jauge ──────────────────────────────────────────────────────────────
+      const pct = auj.pourcentage;
+      document.getElementById("pct-jour").textContent  = pct + "%";
+      document.getElementById("count-jour").textContent =
+        auj.validees + " / " + auj.total + " tâches";
+
+      const circonference = 2 * Math.PI * 15.9;
+      const arc = (pct / 100) * circonference;
+      const arcEl = document.getElementById("jauge-arc");
+      arcEl.setAttribute("stroke-dasharray", arc.toFixed(1) + " " + circonference.toFixed(1));
+      arcEl.setAttribute("stroke", pct >= 80 ? "#3fb950" : pct >= 40 ? "#d29922" : "#f85149");
+
+      // ── Liste tâches ───────────────────────────────────────────────────────
+      const ul = document.getElementById("liste-taches");
+      ul.innerHTML = "";
+      for (const t of data.taches_du_jour) {
+        const li = document.createElement("li");
+        li.className = "item-tache";
+        li.innerHTML = `
+          <span class="pastille ${t.validee ? "vert" : "rouge"}"></span>
+          <span class="item-tache-nom">${t.nom}</span>
+          <span class="item-tache-plage">${t.plage}</span>`;
+        ul.appendChild(li);
+      }
+
+      // ── Graphique 7 jours ──────────────────────────────────────────────────
+      const graphEl = document.getElementById("graphique-7j");
+      graphEl.innerHTML = "";
+      const maxPct = Math.max(...data.historique_7j.map(j => j.pourcentage), 1);
+
+      for (const jour of data.historique_7j) {
+        const date     = new Date(jour.date + "T00:00:00");
+        const labelJ   = JOURS_COURTS[date.getDay()];
+        const hauteur  = Math.round((jour.pourcentage / maxPct) * 100);
+        const couleur  = jour.pourcentage >= 80 ? "#3fb950"
+                       : jour.pourcentage >= 40 ? "#d29922" : "#f85149";
+
+        const col = document.createElement("div");
+        col.className = "barre-colonne";
+        col.innerHTML = `
+          <div class="barre" style="height:${hauteur}%;background:${couleur}"
+               data-tooltip="${jour.pourcentage}% — ${jour.validees} tâche(s)"></div>
+          <span class="barre-label">${labelJ}</span>`;
+        graphEl.appendChild(col);
+      }
+
+      // ── Journal ────────────────────────────────────────────────────────────
+      const journalEl = document.getElementById("journal");
+      journalEl.innerHTML = "";
+
+      if (auj.evenements.length === 0) {
+        journalEl.innerHTML =
+          "<p style='color:var(--subtil);font-size:14px'>Aucune validation pour l'instant.</p>";
+        return;
+      }
+
+      // Plus récent en premier
+      for (const evt of [...auj.evenements].reverse()) {
+        const heure = evt.horodatage.split(" ")[1].substring(0, 5);
+        const div   = document.createElement("div");
+        div.className = "evt";
+        div.innerHTML = `
+          <span class="evt-heure">${heure}</span>
+          <span class="evt-nom">${evt.tache}</span>
+          <span class="evt-badge ${evt.enRetard ? "retard" : "ok"}">
+            ${evt.enRetard ? "En retard" : "À l'heure"}
+          </span>`;
+        journalEl.appendChild(div);
+      }
+    }
+
+    // Chargement initial + rafraîchissement toutes les 5 secondes
+    chargerDonnees();
+    setInterval(chargerDonnees, 5000);
+</script>
+</body>
+</html>
