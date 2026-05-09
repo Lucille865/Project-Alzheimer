@@ -11,11 +11,9 @@ import javafx.util.Duration;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 
+import com.fazecast.jSerialComm.SerialPort; // Ajoute l'import
 import javafx.application.Platform; // Important pour modifier l'UI depuis un Thread
-import java.io.IOException;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
-import com.sun.net.httpserver.HttpServer;
+
 
 public class InterfaceLucien extends Application {
 
@@ -52,7 +50,7 @@ public class InterfaceLucien extends Application {
 
     // ── Communication Arduino ─────────────────────────────────────────────────────────
     private Button      btnOui;
-    private HttpServer serveurWiFi;
+    private SerialPort comPort;
 
     @Override
     public void start(Stage stage) {
@@ -180,7 +178,7 @@ public class InterfaceLucien extends Application {
         root.setPadding(new Insets(0, 20, 0, 20));
         root.setStyle("-fx-background-color: " + C_FOND + ";");
 
-        Scene scene = new Scene(root, 460, 750);
+        Scene scene = new Scene(root, 460, 900);
         stage.setTitle("MémoGuide – Lucien");
         stage.setScene(scene);
         stage.setFullScreen(true);
@@ -192,7 +190,10 @@ public class InterfaceLucien extends Application {
             Platform.exit(); // Force JavaFX à appeler la méthode stop() proprement
         });
 
-        lancerServeurWiFi();
+        // On attend 1 seconde avant de connecter l'Arduino
+        PauseTransition pause = new PauseTransition(Duration.seconds(5));
+        pause.setOnFinished(e -> connecterArduino("COM4"));
+        pause.play();
 
         demarrerHorloge();
     }
@@ -228,6 +229,12 @@ public class InterfaceLucien extends Application {
                 Tache t = active.get();
                 tacheEnCours = t;
 
+                if (comPort != null && comPort.isOpen()) {
+                    String signal = t.isEstValidee() ? "V" : "R";
+                    byte[] data = signal.getBytes();
+                    comPort.writeBytes(data, data.length);
+                }
+
                 labelTache.setText(t.getNom());
                 labelPlage.setText("🕐 " + t.getPlageHoraire());
 
@@ -241,7 +248,10 @@ public class InterfaceLucien extends Application {
                     }
                 }
             } else {
-
+                // Si pas de tâche, on éteint tout
+                if (comPort != null && comPort.isOpen()) {
+                    comPort.writeBytes("X".getBytes(), 1);
+                }
                 tacheEnCours = null;
                 labelTache.setText("Pas de tâche\npour l'instant 😊");
                 labelPlage.setText("");
@@ -359,41 +369,56 @@ public class InterfaceLucien extends Application {
     @Override
     public void stop() {
         if (dashboardServeur != null) dashboardServeur.arreter();
-        if (serveurWiFi != null) {
-            serveurWiFi.stop(0);
-            System.out.println("[Matériel] Serveur Wi-Fi arrêté.");
+        if (comPort != null && comPort.isOpen()) {
+            comPort.closePort();
+            System.out.println("[Matériel] Port COM fermé proprement.");
         }
     }
 
-    private void lancerServeurWiFi() {
-        try {
-            serveurWiFi = HttpServer.create(new InetSocketAddress(8081), 0);
-            serveurWiFi.createContext("/bouton", exchange -> {
-                // On récupère ce qu'il y a après le "?" dans l'URL
-                String query = exchange.getRequestURI().getQuery();
+    private void connecterArduino(String portName) {
+        // On vérifie d'abord si la classe existe pour éviter le crash au chargement
+        //Class.forName("com.fazecast.jSerialComm.SerialPort");
+        //try {
+        System.out.println("--- Liste des ports détectés ---");
+        for (SerialPort p : SerialPort.getCommPorts()) {
+            System.out.println("Port trouvé : " + p.getSystemPortName());
+        }
+        System.out.println("-------------------------------");
+        comPort = SerialPort.getCommPort(portName);
+        comPort.setBaudRate(115200);
+        if (comPort.openPort()) {
+            System.out.println("[Matériel] Arduino connecté !");
+            // On écoute le bouton
+            comPort.addDataListener(new com.fazecast.jSerialComm.SerialPortDataListener() {
 
-                // ON NE VALIDE QUE SI C'EST "valider"
-                if (query != null && query.contains("action=valider")) {
-                    Platform.runLater(() -> actionValidation());
-                    System.out.println("[WIFI] Validation reçue du bouton physique !");
+                @Override
+                public int getListeningEvents() {
+                    return SerialPort.LISTENING_EVENT_DATA_AVAILABLE;
                 }
 
-                // Le reste du temps (si c'est "check"), on renvoie juste l'état des LEDs
-                String signal = "X";
-                if (tacheEnCours != null) {
-                    signal = tacheEnCours.isEstValidee() ? "V" : "R";
-                }
+                @Override
+                public void serialEvent(com.fazecast.jSerialComm.SerialPortEvent event) {
+                    if (event.getEventType() != SerialPort.LISTENING_EVENT_DATA_AVAILABLE) return;
+                    byte[] newData = new byte[comPort.bytesAvailable()];
+                    int numRead = comPort.readBytes(newData, newData.length);
+                    String msg = new String(newData).trim();
+                    System.out.println("[DEBUG USB] Reçu de l'Arduino : " + msg);
 
-                exchange.sendResponseHeaders(200, signal.length());
-                try (OutputStream os = exchange.getResponseBody()) {
-                    os.write(signal.getBytes());
+                    if (msg.contains("BTN_ROUGE")) {
+                    // Crucial : Platform.runLater permet de cliquer sur le bouton
+                    // depuis un autre thread que celui de l'UI JavaFX
+                        Platform.runLater(() -> actionValidation());
+                    }
                 }
             });
-            serveurWiFi.setExecutor(null);
-            serveurWiFi.start();
-            System.out.println("[SERVEUR] Wi-Fi actif sur le port 8080");
-        } catch (IOException e) {
-            System.err.println("Erreur serveur Wi-Fi : " + e.getMessage());
+        } else {
+            System.err.println("[Matériel] Impossible d'ouvrir le port " + portName);
         }
+        //} catch (Throwable t) {
+        // Throwable attrape aussi les Error comme UnsatisfiedLinkError
+        //System.err.println("[ERREUR CRITIQUE] Pilote USB incompatible : " + t.getMessage());
+        //System.err.println("L'application continue sans Arduino.");
+        //}
+
     }
 }
