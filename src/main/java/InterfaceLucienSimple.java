@@ -13,6 +13,10 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 
+import javafx.scene.media.AudioClip;
+import java.awt.Desktop;
+import java.net.URI;
+
 /**
  * Interface simplifiée pour la tablette de Lucien.
  * – Tâche courante en très grand
@@ -36,6 +40,7 @@ public class InterfaceLucienSimple extends Application {
     // ── État ─────────────────────────────────────────────────────────────────
     private TacheManager    tacheManager;
     private HistoriqueManager historiqueManager;
+    private DashboardServeur dashboardServeur;
     private Tache           tacheEnCours = null;
 
     // ── Composants ───────────────────────────────────────────────────────────
@@ -49,6 +54,13 @@ public class InterfaceLucienSimple extends Application {
     public void start(Stage stage) {
         tacheManager      = new TacheManager();
         historiqueManager = new HistoriqueManager();
+
+        // Démarre le serveur dashboard
+        dashboardServeur = new DashboardServeur(tacheManager, historiqueManager);
+        dashboardServeur.demarrer();
+
+        // Ouvre automatiquement le navigateur
+        ouvrirDashboardDansNavigateur();
 
         // ── Bandeau couleur en haut (indicateur d'urgence) ────────────────
         bandeauCouleur = new Region();
@@ -238,6 +250,17 @@ public class InterfaceLucienSimple extends Application {
     private String styleLabel(String couleur) {
         return "-fx-font-size: 26px; -fx-text-fill: " + couleur + ";";
     }
+
+private void ouvrirDashboardDansNavigateur() {
+    System.out.println("🌐 Dashboard disponible sur http://localhost:8080");
+
+    // Affiche une alerte
+    Alert alert = new Alert(Alert.AlertType.INFORMATION);
+    alert.setTitle("Dashboard dans Navigateur");
+    alert.setHeaderText("Tableau de bord disponible");
+    alert.setContentText("Ouvrez votre navigateur web et allez à :\n\nhttp://localhost:8080\n\nLe dashboard se met à jour automatiquement.");
+    alert.showAndWait();
+}
 
     public static void main(String[] args) { launch(args); }
 }

@@ -21,19 +21,23 @@ public class DashboardServeur {
     public void demarrer() {
         try {
             serveur = HttpServer.create(new InetSocketAddress(PORT), 0);
+            System.out.println("✅ Serveur HTTP créé sur port " + PORT);
 
-            // Route : page HTML principale
             serveur.createContext("/", this::servirHtml);
-
-            // Route : données JSON en temps réel
             serveur.createContext("/api/data", this::servirJson);
 
             serveur.setExecutor(null);
             serveur.start();
-            System.out.println("[Dashboard] Accessible sur http://localhost:" + PORT);
+
+            System.out.println("=" .repeat(50));
+            System.out.println("📊 DASHBOARD DISPONIBLE :");
+            System.out.println("   → http://localhost:" + PORT);
+            System.out.println("=" .repeat(50));
 
         } catch (IOException e) {
-            System.err.println("[Dashboard] Impossible de démarrer : " + e.getMessage());
+            System.err.println("❌ Impossible de démarrer le serveur sur le port " + PORT);
+            System.err.println("   Cause: " + e.getMessage());
+            System.err.println("   Peut-être le port est déjà utilisé ?");
         }
     }
 
@@ -44,14 +48,56 @@ public class DashboardServeur {
     // ── Handlers ──────────────────────────────────────────────────────────────
 
     private void servirHtml(HttpExchange exchange) throws IOException {
-        // On lit le fichier dashboard.html depuis le classpath
+        // Affiche le chemin de recherche pour debug
+        System.out.println("Recherche du fichier dashboard.html...");
+
+        // Essaye plusieurs méthodes pour charger le fichier
         InputStream is = getClass().getResourceAsStream("/dashboard.html");
+
+        if (is == null) {
+            // Essaye avec un chemin différent
+            is = getClass().getResourceAsStream("dashboard.html");
+        }
+
+        if (is == null) {
+            // Essaye de charger depuis le système de fichiers
+            try {
+                File file = new File("src/main/resources/dashboard.html");
+                if (file.exists()) {
+                    is = new FileInputStream(file);
+                    System.out.println("Fichier trouvé dans src/main/resources/");
+                }
+            } catch (Exception e) {}
+        }
+
         byte[] contenu;
 
         if (is != null) {
             contenu = is.readAllBytes();
+            System.out.println("✅ dashboard.html chargé, taille: " + contenu.length + " bytes");
+            is.close();
         } else {
-            contenu = "<h1>dashboard.html introuvable</h1>".getBytes(StandardCharsets.UTF_8);
+            System.err.println("❌ dashboard.html INTROUVABLE !");
+            // Crée un HTML minimal par défaut
+            String htmlMinimal = """
+            <!DOCTYPE html>
+            <html>
+            <head><title>Dashboard Lucien</title></head>
+            <body>
+                <h1>📊 Dashboard Lucien</h1>
+                <div id="data"></div>
+                <script>
+                    fetch('/api/data')
+                        .then(r => r.json())
+                        .then(data => {
+                            document.getElementById('data').innerHTML = 
+                                '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                        });
+                </script>
+            </body>
+            </html>
+        """;
+            contenu = htmlMinimal.getBytes(StandardCharsets.UTF_8);
         }
 
         exchange.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8");
