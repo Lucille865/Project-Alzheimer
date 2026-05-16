@@ -5,22 +5,22 @@ public class Main {
         Scanner scanner = new Scanner(System.in);
 
         System.out.println("=== MENU PRINCIPAL ===");
-        System.out.println("1. Lancer l'interface Lucien (version simple)");
-        System.out.println("2. Lancer l'interface Lucien (version complète)");
-        System.out.println("3. Tester le backend en console");
+        System.out.println("1. Lancer l'interface Lucien");
+        System.out.println("2. Tester le backend en console");
+        System.out.println("3. Lancer l'interface Lucien Simple");
         System.out.print("Choix : ");
 
         int choix = scanner.nextInt();
 
         switch (choix) {
             case 1:
-                InterfaceLucienSimple.launch(InterfaceLucienSimple.class, args);
-                break;
-            case 2:
                 InterfaceLucien.launch(InterfaceLucien.class, args);
                 break;
-            case 3:
+            case 2:
                 testBackendConsole();
+                break;
+            case 3:
+                InterfaceLucienSimple.launch(InterfaceLucienSimple.class, args);
                 break;
             default:
                 System.out.println("Choix invalide");

@@ -1,26 +1,39 @@
 import javafx.animation.*;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.geometry.*;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.input.KeyCode;
 import javafx.scene.layout.*;
 import javafx.scene.text.TextAlignment;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
-
-import javafx.application.Platform; // Important pour modifier l'UI depuis un Thread
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Optional;
+
 import com.sun.net.httpserver.HttpServer;
 
+/**
+ * Interface unifiée MémoGuide – Lucien.
+ *
+ * Combine :
+ *  – la version simple  (bandeau urgence, grands visuels, SonRappel, touche Entrée)
+ *  – la version complète (dashboard HTTP, serveur Wi-Fi physique, simulation, barre de progression)
+ *
+ * Bugs corrigés par rapport aux versions originales :
+ *  1. enRetard dans actionValidation() : utilise désormais un calcul direct de durée
+ *     (l'ancienne version appelait doitDeclenchemerRappel() après valider(), ce qui
+ *     renvoyait toujours false car estValidee était déjà true).
+ *  2. Rappels sonores : remplace java.awt.Toolkit.beep() par SonRappel.bipRappel().
+ *  3. Log serveur Wi-Fi : corrigé de "8080" → "8081".
+ */
 public class InterfaceLucien extends Application {
-
-    private HistoriqueManager historiqueManager;
-    private DashboardServeur  dashboardServeur;
 
     // ── Palette ──────────────────────────────────────────────────────────────
     private static final String C_FOND    = "#0d1117";
@@ -34,40 +47,49 @@ public class InterfaceLucien extends Application {
     private static final String C_GRIS    = "#484f58";
     private static final String C_BLEU    = "#388bfd";
 
-    private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final DateTimeFormatter FMT      = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final DateTimeFormatter FMT_HHMM = DateTimeFormatter.ofPattern("HH:mm");
 
     // ── État ─────────────────────────────────────────────────────────────────
-    private TacheManager tacheManager;
-    private Tache        tacheEnCours = null;
-    private long         offsetMinutes = 0; // décalage de simulation en minutes
+    private TacheManager      tacheManager;
+    private HistoriqueManager historiqueManager;
+    private DashboardServeur  dashboardServeur;
+    private HttpServer        serveurWiFi;
 
-    // ── Composants UI ─────────────────────────────────────────────────────────
-    private Label       labelHeure;
-    private Label       labelTache;
-    private Label       labelPlage;
-    private Label       labelStatut;
-    private Label       labelProgres;
-    private Label       labelOffsetInfo;
+    private Tache tacheEnCours  = null;
+    private long  offsetMinutes = 0; // décalage de simulation en minutes
+
+    // ── Composants UI ────────────────────────────────────────────────────────
+    private Region     bandeauCouleur;  // bande colorée en haut – indicateur d'urgence (version Simple)
+    private Label      labelHeure;
+    private Label      labelTache;
+    private Label      labelPlage;
+    private Label      labelStatut;
+    private Label      labelProgres;
+    private Label      labelOffsetInfo;
     private ProgressBar progressBar;
+    private Button     btnOui;
 
-    // ── Communication Arduino ─────────────────────────────────────────────────────────
-    private Button      btnOui;
-    private HttpServer serveurWiFi;
+    // ─────────────────────────────────────────────────────────────────────────
 
     @Override
     public void start(Stage stage) {
-        tacheManager = new TacheManager();
+        tacheManager      = new TacheManager();
         historiqueManager = new HistoriqueManager();
         dashboardServeur  = new DashboardServeur(tacheManager, historiqueManager);
         dashboardServeur.demarrer();
-        //connecterArduino("COM4");
 
-        // ── Header ────────────────────────────────────────────────────────────
+        // ── Bandeau urgence (hérité de la version simple) ─────────────────
+        bandeauCouleur = new Region();
+        bandeauCouleur.setPrefHeight(10);
+        bandeauCouleur.setMaxWidth(Double.MAX_VALUE);
+        bandeauCouleur.setStyle("-fx-background-color: " + C_GRIS + ";");
+
+        // ── Header ────────────────────────────────────────────────────────
         labelHeure = creerLabel("00:00:00", 60, true, C_TEXTE);
 
         Label salutation = creerLabel("Bonjour Lucien 👋", 24, true, C_TEXTE);
 
-        // Phrase de rappel pour Lucien (alzheimer)
         Label rappelAppli = creerLabel(
                 "Cette application t'aide à te souvenir\n" +
                         "de tes activités importantes de la journée.\n" +
@@ -80,21 +102,20 @@ public class InterfaceLucien extends Application {
 
         VBox header = new VBox(8, labelHeure, salutation, rappelAppli);
         header.setAlignment(Pos.CENTER);
-        header.setPadding(new Insets(36, 24, 16, 24));
+        header.setPadding(new Insets(24, 24, 12, 24));
 
         Separator sep1 = new Separator();
         sep1.setMaxWidth(380);
         sep1.setStyle("-fx-background-color: " + C_BORDURE + ";");
 
-        // ── Carte tâche principale ────────────────────────────────────────────
+        // ── Carte tâche principale ────────────────────────────────────────
         labelTache = creerLabel("Chargement…", 36, true, C_TEXTE);
         labelTache.setWrapText(true);
         labelTache.setMaxWidth(380);
         labelTache.setTextAlignment(TextAlignment.CENTER);
         labelTache.setAlignment(Pos.CENTER);
 
-        labelPlage = creerLabel("", 18, false, C_SUBTIL);
-
+        labelPlage  = creerLabel("", 18, false, C_SUBTIL);
         labelStatut = creerLabel("", 20, false, C_SUBTIL);
 
         VBox carteTache = new VBox(10, labelTache, labelPlage, labelStatut);
@@ -110,20 +131,19 @@ public class InterfaceLucien extends Application {
                         "-fx-padding: 28;"
         );
 
-        // ── Bouton OUI ────────────────────────────────────────────────────────
+        // ── Bouton OUI ────────────────────────────────────────────────────
         btnOui = new Button("OUI  ✓");
         btnOui.setPrefSize(340, 140);
-        appliquerStyleBouton(btnOui, C_VERT);
-
+        stylesBouton(C_VERT);
         btnOui.setOnAction(e -> actionValidation());
 
-        // ── Progression ───────────────────────────────────────────────────────
+        // ── Progression ───────────────────────────────────────────────────
         progressBar = new ProgressBar(0);
         progressBar.setPrefWidth(380);
         progressBar.setPrefHeight(10);
         progressBar.setStyle("-fx-accent: " + C_VERT + ";");
 
-        labelProgres = creerLabel("0 / 8 tâches effectuées", 15, false, C_SUBTIL);
+        labelProgres = creerLabel("0 / 0 tâches effectuées", 15, false, C_SUBTIL);
 
         VBox progressBox = new VBox(6, progressBar, labelProgres);
         progressBox.setAlignment(Pos.CENTER);
@@ -132,23 +152,16 @@ public class InterfaceLucien extends Application {
         sep2.setMaxWidth(380);
         sep2.setStyle("-fx-background-color: " + C_BORDURE + ";");
 
-        // ── Panneau de simulation ─────────────────────────────────────────────
+        // ── Panneau de simulation ─────────────────────────────────────────
         Label titreSim = creerLabel("🧪 Simulation", 14, true, C_SUBTIL);
-
         labelOffsetInfo = creerLabel("Heure simulée : aucun décalage", 14, false, C_BLEU);
 
-        Button btn15  = creerBoutonSim("+15 min", () -> offsetMinutes += 15);
-        Button btn1h  = creerBoutonSim("+1 heure", () -> offsetMinutes += 60);
-        Button btn3h  = creerBoutonSim("+3 heures", () -> offsetMinutes += 180);
+        Button btn15    = creerBoutonSim("+15 min",   () -> offsetMinutes += 15);
+        Button btn1h    = creerBoutonSim("+1 heure",  () -> offsetMinutes += 60);
+        Button btn3h    = creerBoutonSim("+3 heures", () -> offsetMinutes += 180);
         Button btnReset = creerBoutonSim("↺ Reset", () -> {
             offsetMinutes = 0;
-            // Réinitialise toutes les tâches pour repartir proprement
-            tacheManager.getTaches().forEach(t -> {
-                if (t.isEstValidee()) {
-                    // Force un reset en appelant verifierReset avec une heure très tardive
-                    t.verifierReset(LocalTime.of(23, 59));
-                }
-            });
+            tacheManager.getTaches().forEach(t -> t.verifierReset(LocalTime.of(23, 59)));
         });
 
         HBox boutonsSim = new HBox(10, btn15, btn1h, btn3h, btnReset);
@@ -166,34 +179,47 @@ public class InterfaceLucien extends Application {
         );
         panneauSim.setMaxWidth(420);
 
-        // ── Racine ────────────────────────────────────────────────────────────
-        VBox root = new VBox(20,
-                header,
-                sep1,
-                carteTache,
-                btnOui,
-                progressBox,
-                sep2,
-                panneauSim
+        // ── Salutation pied de page (hérité de la version simple) ─────────
+        Label pied = creerLabel(
+                "Appuie sur le bouton quand tu as fait la tâche 😊",
+                14, false, C_SUBTIL
         );
+        pied.setPadding(new Insets(0, 0, 12, 0));
+
+        // ── Racine ────────────────────────────────────────────────────────
+        VBox contenu = new VBox(16,
+                header, sep1,
+                carteTache, btnOui,
+                progressBox, sep2,
+                panneauSim, pied
+        );
+        contenu.setAlignment(Pos.CENTER);
+        contenu.setPadding(new Insets(0, 20, 0, 20));
+        VBox.setVgrow(contenu, Priority.ALWAYS);
+
+        VBox root = new VBox(bandeauCouleur, contenu);
         root.setAlignment(Pos.CENTER);
-        root.setPadding(new Insets(0, 20, 0, 20));
         root.setStyle("-fx-background-color: " + C_FOND + ";");
 
-        Scene scene = new Scene(root, 460, 750);
+        Scene scene = new Scene(root, 460, 800);
+
+        // ── Touche Entrée = clic OUI (hérité de la version simple) ────────
+        scene.setOnKeyPressed(event -> {
+            if (event.getCode() == KeyCode.ENTER && !btnOui.isDisabled()) {
+                btnOui.fire();
+            }
+        });
+
         stage.setTitle("MémoGuide – Lucien");
         stage.setScene(scene);
         stage.setFullScreen(true);
+        stage.setOnCloseRequest(e -> {
+            stop();
+            Platform.exit();
+        });
         stage.show();
 
-        stage.setOnCloseRequest(e -> {
-            System.out.println("Fermeture demandée par l'utilisateur...");
-            stop();
-            Platform.exit(); // Force JavaFX à appeler la méthode stop() proprement
-        });
-
         lancerServeurWiFi();
-
         demarrerHorloge();
     }
 
@@ -201,10 +227,9 @@ public class InterfaceLucien extends Application {
 
     private void demarrerHorloge() {
         Timeline horloge = new Timeline(new KeyFrame(Duration.seconds(1), e -> {
-            // Heure simulée = heure réelle + décalage choisi
             LocalTime now = LocalTime.now().plusMinutes(offsetMinutes);
 
-            // Heure affichée
+            // Affichage heure
             labelHeure.setText(now.format(FMT));
 
             // Info décalage
@@ -213,21 +238,18 @@ public class InterfaceLucien extends Application {
             } else {
                 long h = offsetMinutes / 60;
                 long m = offsetMinutes % 60;
-                String decalage = (h > 0 ? h + "h " : "") + (m > 0 ? m + "min" : "");
-                labelOffsetInfo.setText("Décalage actif : +" + decalage
-                        + "  →  heure simulée : " + now.format(DateTimeFormatter.ofPattern("HH:mm")));
+                String dec = (h > 0 ? h + "h " : "") + (m > 0 ? m + "min" : "");
+                labelOffsetInfo.setText("Décalage actif : +" + dec
+                        + "  →  heure simulée : " + now.format(FMT_HHMM));
             }
 
             // Backend
             tacheManager.mettreAJour(now);
-
-            // Tâche active
-            var active = tacheManager.getTacheActive(now);
+            Optional<Tache> active = tacheManager.getTacheActive(now);
 
             if (active.isPresent()) {
                 Tache t = active.get();
                 tacheEnCours = t;
-
                 labelTache.setText(t.getNom());
                 labelPlage.setText("🕐 " + t.getPlageHoraire());
 
@@ -235,26 +257,28 @@ public class InterfaceLucien extends Application {
                     afficherEtatValide();
                 } else {
                     afficherEtatAFaire(t, now);
+                    // Rappel sonore 30 min après le début si non validée
+                    // CORRECTION : utilise SonRappel au lieu de Toolkit.beep()
                     if (t.doitDeclenchemerRappel(now)) {
-                        java.awt.Toolkit.getDefaultToolkit().beep();
+                        SonRappel.bipRappel();
                         System.out.println("[🔔 RAPPEL] " + t.getNom() + " non validée depuis 30 min !");
                     }
                 }
             } else {
-
                 tacheEnCours = null;
                 labelTache.setText("Pas de tâche\npour l'instant 😊");
                 labelPlage.setText("");
                 labelStatut.setText("Profite de ton temps libre !");
                 labelStatut.setStyle(styleLabelStatut(C_SUBTIL));
-                appliquerStyleBouton(btnOui, C_GRIS);
+                stylesBouton(C_GRIS);
+                bandeauCouleur.setStyle("-fx-background-color: " + C_GRIS + ";");
                 btnOui.setDisable(true);
             }
 
             // Progression
             long validees = tacheManager.getNbValidees();
             int  total    = tacheManager.getNbTotal();
-            progressBar.setProgress((double) validees / total);
+            progressBar.setProgress(total == 0 ? 0 : (double) validees / total);
             labelProgres.setText(validees + " / " + total + " tâches effectuées");
         }));
 
@@ -265,13 +289,18 @@ public class InterfaceLucien extends Application {
     // ── États visuels ─────────────────────────────────────────────────────────
 
     private void afficherEtatValide() {
+        btnOui.setText("✓  C'est fait !");
         labelStatut.setText("✅ Bravo Lucien, c'est fait !");
         labelStatut.setStyle(styleLabelStatut(C_VERT));
-        appliquerStyleBouton(btnOui, C_GRIS);
+        stylesBouton(C_GRIS);
+        bandeauCouleur.setStyle("-fx-background-color: " + C_VERT + ";");
         btnOui.setDisable(true);
     }
 
     private void afficherEtatAFaire(Tache t, LocalTime now) {
+        btnOui.setText("OUI  ✓");
+        btnOui.setDisable(false);
+
         long min = java.time.temporal.ChronoUnit.MINUTES.between(now, t.getHeureReset());
         String urgence;
         String couleur;
@@ -283,23 +312,33 @@ public class InterfaceLucien extends Application {
             urgence = "🕐 Plus que " + min + " min";
             couleur = C_ORANGE;
         } else {
-            urgence = "À faire avant " + t.getHeureReset();
+            urgence = "À faire avant " + t.getHeureReset().format(FMT_HHMM);
             couleur = C_SUBTIL;
         }
 
         labelStatut.setText(urgence);
         labelStatut.setStyle(styleLabelStatut(couleur));
-        appliquerStyleBouton(btnOui, min <= 15 ? C_ROUGE : min <= 45 ? C_ORANGE : C_VERT);
-        btnOui.setDisable(false);
+        stylesBouton(min <= 15 ? C_ROUGE : min <= 45 ? C_ORANGE : C_VERT);
+        bandeauCouleur.setStyle("-fx-background-color: " + couleur + ";");
     }
 
     // ── Action bouton OUI ─────────────────────────────────────────────────────
 
     private void actionValidation() {
         if (tacheEnCours == null || tacheEnCours.isEstValidee()) return;
+
+        // CORRECTION : calcul enRetard AVANT d'appeler valider()
+        // L'ancienne version appelait doitDeclenchemerRappel() après valider(),
+        // ce qui renvoyait toujours false (estValidee == true à ce moment-là).
+        LocalTime maintenant = LocalTime.now().plusMinutes(offsetMinutes);
+        boolean enRetard = java.time.temporal.ChronoUnit.MINUTES
+                .between(tacheEnCours.getHeureDebut(), maintenant) > 30;
+
         tacheEnCours.valider();
-        boolean enRetard = tacheEnCours.doitDeclenchemerRappel(LocalTime.now().plusMinutes(offsetMinutes));
         historiqueManager.enregistrerValidation(tacheEnCours, enRetard);
+
+        // Son de confirmation (hérité de la version simple)
+        SonRappel.bipValidation();
 
         ScaleTransition pulse = new ScaleTransition(Duration.millis(140), btnOui);
         pulse.setFromX(1.0); pulse.setFromY(1.0);
@@ -310,7 +349,76 @@ public class InterfaceLucien extends Application {
         pulse.play();
     }
 
+    // ── Serveur Wi-Fi (bouton physique Arduino) ───────────────────────────────
+
+    private void lancerServeurWiFi() {
+        try {
+            serveurWiFi = HttpServer.create(new InetSocketAddress(8081), 0);
+            serveurWiFi.createContext("/bouton", exchange -> {
+                String query = exchange.getRequestURI().getQuery();
+
+                if (query != null && query.contains("action=valider")) {
+                    Platform.runLater(this::actionValidation);
+                    System.out.println("[WIFI] Validation reçue du bouton physique !");
+                }
+
+                // Renvoie l'état LED : V = validé, R = à faire, X = aucune tâche
+                String signal = "X";
+                if (tacheEnCours != null) {
+                    signal = tacheEnCours.isEstValidee() ? "V" : "R";
+                }
+
+                exchange.sendResponseHeaders(200, signal.length());
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(signal.getBytes());
+                }
+            });
+            serveurWiFi.setExecutor(null);
+            serveurWiFi.start();
+            // CORRECTION : le message indiquait "8080" alors que le port est 8081
+            System.out.println("[SERVEUR] Wi-Fi actif sur le port 8081");
+        } catch (IOException e) {
+            System.err.println("[Serveur Wi-Fi] Erreur démarrage : " + e.getMessage());
+        }
+    }
+
+    // ── Cycle de vie ──────────────────────────────────────────────────────────
+
+    @Override
+    public void stop() {
+        if (dashboardServeur != null) dashboardServeur.arreter();
+        if (serveurWiFi != null) {
+            serveurWiFi.stop(0);
+            System.out.println("[Matériel] Serveur Wi-Fi arrêté.");
+        }
+    }
+
     // ── Helpers UI ────────────────────────────────────────────────────────────
+
+    private Label creerLabel(String texte, int taille, boolean bold, String couleur) {
+        Label l = new Label(texte);
+        l.setStyle(
+                "-fx-font-size: " + taille + "px;" +
+                        (bold ? "-fx-font-weight: bold;" : "") +
+                        "-fx-text-fill: " + couleur + ";"
+        );
+        return l;
+    }
+
+    private void stylesBouton(String couleur) {
+        btnOui.setStyle(
+                "-fx-background-color: " + couleur + ";" +
+                        "-fx-background-radius: 18;" +
+                        "-fx-font-size: 44px;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-text-fill: white;" +
+                        "-fx-cursor: hand;"
+        );
+    }
+
+    private String styleLabelStatut(String couleur) {
+        return "-fx-font-size: 19px; -fx-text-fill: " + couleur + ";";
+    }
 
     private Button creerBoutonSim(String texte, Runnable action) {
         Button btn = new Button(texte);
@@ -329,71 +437,5 @@ public class InterfaceLucien extends Application {
         return btn;
     }
 
-    private Label creerLabel(String texte, int taille, boolean bold, String couleur) {
-        Label l = new Label(texte);
-        l.setStyle(
-                "-fx-font-size: " + taille + "px;" +
-                        (bold ? "-fx-font-weight: bold;" : "") +
-                        "-fx-text-fill: " + couleur + ";"
-        );
-        return l;
-    }
-
-    private void appliquerStyleBouton(Button btn, String couleur) {
-        btn.setStyle(
-                "-fx-background-color: " + couleur + ";" +
-                        "-fx-background-radius: 18;" +
-                        "-fx-font-size: 44px;" +
-                        "-fx-font-weight: bold;" +
-                        "-fx-text-fill: white;" +
-                        "-fx-cursor: hand;"
-        );
-    }
-
-    private String styleLabelStatut(String couleur) {
-        return "-fx-font-size: 19px; -fx-text-fill: " + couleur + ";";
-    }
-
     public static void main(String[] args) { launch(args); }
-
-    @Override
-    public void stop() {
-        if (dashboardServeur != null) dashboardServeur.arreter();
-        if (serveurWiFi != null) {
-            serveurWiFi.stop(0);
-            System.out.println("[Matériel] Serveur Wi-Fi arrêté.");
-        }
-    }
-
-    private void lancerServeurWiFi() {
-        try {
-            serveurWiFi = HttpServer.create(new InetSocketAddress(8081), 0);
-            serveurWiFi.createContext("/bouton", exchange -> {
-                // On récupère ce qu'il y a après le "?" dans l'URL
-                String query = exchange.getRequestURI().getQuery();
-
-                // ON NE VALIDE QUE SI C'EST "valider"
-                if (query != null && query.contains("action=valider")) {
-                    Platform.runLater(() -> actionValidation());
-                    System.out.println("[WIFI] Validation reçue du bouton physique !");
-                }
-
-                // Le reste du temps (si c'est "check"), on renvoie juste l'état des LEDs
-                String signal = "X";
-                if (tacheEnCours != null) {
-                    signal = tacheEnCours.isEstValidee() ? "V" : "R";
-                }
-
-                exchange.sendResponseHeaders(200, signal.length());
-                try (OutputStream os = exchange.getResponseBody()) {
-                    os.write(signal.getBytes());
-                }
-            });
-            serveurWiFi.setExecutor(null);
-            serveurWiFi.start();
-            System.out.println("[SERVEUR] Wi-Fi actif sur le port 8080");
-        } catch (IOException e) {
-            System.err.println("Erreur serveur Wi-Fi : " + e.getMessage());
-        }
-    }
 }
