@@ -31,7 +31,7 @@ import com.sun.net.httpserver.HttpServer;
  *     (l'ancienne version appelait doitDeclenchemerRappel() après valider(), ce qui
  *     renvoyait toujours false car estValidee était déjà true).
  *  2. Rappels sonores : remplace java.awt.Toolkit.beep() par SonRappel.bipRappel().
- *  3. Log serveur Wi-Fi : corrigé de "8080" → "8081".
+ *  3. Log serveur Wi-Fi : corrigé de "8080" → "8082".
  */
 public class InterfaceLucien extends Application {
 
@@ -353,7 +353,7 @@ public class InterfaceLucien extends Application {
 
     private void lancerServeurWiFi() {
         try {
-            serveurWiFi = HttpServer.create(new InetSocketAddress(8081), 0);
+            serveurWiFi = HttpServer.create(new InetSocketAddress(8082), 0);
             serveurWiFi.createContext("/bouton", exchange -> {
                 String query = exchange.getRequestURI().getQuery();
 
@@ -375,8 +375,8 @@ public class InterfaceLucien extends Application {
             });
             serveurWiFi.setExecutor(null);
             serveurWiFi.start();
-            // CORRECTION : le message indiquait "8080" alors que le port est 8081
-            System.out.println("[SERVEUR] Wi-Fi actif sur le port 8081");
+            // CORRECTION : le message indiquait "8080" alors que le port est 8082
+            System.out.println("[SERVEUR] Wi-Fi actif sur le port 8082");
         } catch (IOException e) {
             System.err.println("[Serveur Wi-Fi] Erreur démarrage : " + e.getMessage());
         }
