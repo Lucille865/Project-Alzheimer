@@ -1,58 +1,99 @@
-import javax.sound.sampled.*;
+import javafx.scene.media.AudioClip;
+import javafx.scene.media.Media;
+import javafx.scene.media.MediaPlayer;
+import java.net.URL;
 
 /**
- * Génère un son d'alerte programmatiquement (pas besoin de fichier audio).
- * Deux sons : un bip doux pour la validation, un bip insistant pour le rappel.
+ * Gestionnaire des sons pour l'application MémoGuide
  */
 public class SonRappel {
 
-    /** Bip court de confirmation (validation d'une tâche). */
-    public static void bipValidation() {
-        jouer(880, 180, 0.4f);
+    private static AudioClip sonActivation;
+    private static AudioClip sonRappel;
+    private static boolean sonsActives = true;
+
+    // Initialisation statique des sons
+    static {
+        chargerSons();
     }
 
     /**
-     * Séquence de 3 bips insistants pour le rappel 30 min.
-     * Lancé dans un thread séparé pour ne pas bloquer l'UI.
+     * Charge les fichiers sons depuis le dossier resources/sounds/
      */
-    public static void bipRappel() {
-        new Thread(() -> {
-            for (int i = 0; i < 3; i++) {
-                jouer(520, 400, 0.7f);
-                try { Thread.sleep(200); } catch (InterruptedException ignored) {}
-            }
-        }, "thread-son-rappel").start();
-    }
-
-    /**
-     * @param frequenceHz  hauteur du son (Hz)
-     * @param dureeMilis   durée en millisecondes
-     * @param volume       amplitude 0.0 → 1.0
-     */
-    private static void jouer(int frequenceHz, int dureeMilis, float volume) {
+    private static void chargerSons() {
         try {
-            float  sampleRate  = 44100f;
-            int    nbSamples   = (int) (sampleRate * dureeMilis / 1000);
-            byte[] buffer      = new byte[nbSamples * 2]; // 16 bits = 2 octets/sample
-
-            for (int i = 0; i < nbSamples; i++) {
-                // Onde sinusoïdale + enveloppe fade-out pour adoucir la fin
-                double angle     = 2.0 * Math.PI * i * frequenceHz / sampleRate;
-                double envelope  = 1.0 - (double) i / nbSamples; // fade linéaire
-                short  sample    = (short) (Math.sin(angle) * volume * envelope * Short.MAX_VALUE);
-                buffer[2 * i]     = (byte) (sample & 0xff);
-                buffer[2 * i + 1] = (byte) ((sample >> 8) & 0xff);
+            // Son d'activation (quand une tâche devient active)
+            URL urlActivation = SonRappel.class.getResource("/sounds/Audio-petite-fille-1.wav");
+            if (urlActivation != null) {
+                sonActivation = new AudioClip(urlActivation.toString());
+                System.out.println("✅ Son d'activation chargé");
+            } else {
+                System.err.println("❌ Fichier activation.wav introuvable");
             }
 
-            AudioFormat format = new AudioFormat(sampleRate, 16, 1, true, false);
-            try (SourceDataLine line = AudioSystem.getSourceDataLine(format)) {
-                line.open(format, buffer.length);
-                line.start();
-                line.write(buffer, 0, buffer.length);
-                line.drain();
+            // Son de rappel (30 minutes)
+            URL urlRappel = SonRappel.class.getResource("/sounds/Audio-petite-fille-2.wav");
+            if (urlRappel != null) {
+                sonRappel = new AudioClip(urlRappel.toString());
+                System.out.println("✅ Son de rappel chargé");
+            } else {
+                System.err.println("❌ Fichier rappel.wav introuvable");
             }
-        } catch (LineUnavailableException e) {
-            System.err.println("[Son] Ligne audio indisponible : " + e.getMessage());
+
+        } catch (Exception e) {
+            System.err.println("❌ Erreur lors du chargement des sons: " + e.getMessage());
         }
+    }
+
+    /**
+     * Joue le son d'activation (quand une tâche devient active)
+     */
+    public static void jouerSonActivation() {
+        if (!sonsActives) return;
+
+        if (sonActivation != null) {
+            sonActivation.play();
+            System.out.println("🔊 Son d'activation joué");
+        } else {
+            System.out.println("[SON] Activation (fichier manquant)");
+        }
+    }
+
+    /**
+     * Joue le son de rappel (30 minutes après le début)
+     */
+    public static void jouerSonRappel() {
+        if (!sonsActives) return;
+
+        if (sonRappel != null) {
+            sonRappel.play();
+            System.out.println("🔊 Son de rappel joué");
+        } else {
+            System.out.println("[🔔 RAPPEL] 30 minutes écoulées !");
+        }
+    }
+
+    /**
+     * Joue le son de validation (quand on appuie sur OUI)
+     * Optionnel : vous pouvez ajouter un troisième son
+     */
+    public static void jouerSonValidation() {
+        // Vous pouvez ajouter un son validation.wav si vous voulez
+        System.out.println("✓ Validation effectuée");
+    }
+
+    /**
+     * Active ou désactive tous les sons
+     */
+    public static void setSonsActives(boolean actives) {
+        sonsActives = actives;
+        System.out.println("Sons " + (actives ? "activés" : "désactivés"));
+    }
+
+    /**
+     * Vérifie si les sons sont chargés correctement
+     */
+    public static boolean sontSonsCharges() {
+        return sonActivation != null && sonRappel != null;
     }
 }

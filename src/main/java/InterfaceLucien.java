@@ -260,7 +260,7 @@ public class InterfaceLucien extends Application {
                     // Rappel sonore 30 min après le début si non validée
                     // CORRECTION : utilise SonRappel au lieu de Toolkit.beep()
                     if (t.doitDeclenchemerRappel(now)) {
-                        SonRappel.bipRappel();
+                        SonRappel.jouerSonRappel();
                         System.out.println("[🔔 RAPPEL] " + t.getNom() + " non validée depuis 30 min !");
                     }
                 }
@@ -338,7 +338,7 @@ public class InterfaceLucien extends Application {
         historiqueManager.enregistrerValidation(tacheEnCours, enRetard);
 
         // Son de confirmation (hérité de la version simple)
-        SonRappel.bipValidation();
+        SonRappel.jouerSonActivation();
 
         ScaleTransition pulse = new ScaleTransition(Duration.millis(140), btnOui);
         pulse.setFromX(1.0); pulse.setFromY(1.0);
