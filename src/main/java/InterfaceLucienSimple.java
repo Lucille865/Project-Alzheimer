@@ -220,31 +220,26 @@ public class InterfaceLucienSimple extends Application {
         tacheManager.mettreAJour(now);
         Optional<Tache> active = tacheManager.getTacheActive(now);
 
+        if (tacheEnCours != null && tacheEnCours.isEstValidee()) {
+            if (now.isBefore(tacheEnCours.getHeureReset())) {
+                // On force le maintien de l'affichage vert, peu importe ce que dit le manager
+                afficherEtatValide(tacheEnCours.getNom(), tacheEnCours.getHeureReset());
+                return;
+            } else {
+                // L'heure de reset est dépassée ! On nettoie le mode validation
+                enModeValidation = false;
+                nomTacheValidee = "";
+                tacheEnCours = null;
+            }
+        }
+
         if (active.isPresent()) {
             Tache t = active.get();
 
-            // Si la tâche est validée, on affiche l'état validé en vert
-            if (t.isEstValidee()) {
-                // Vérifier si on est toujours dans la période de cette tâche
-                if (now.isBefore(t.getHeureReset())) {
-                    // La tâche validée reste affichée en vert jusqu'à l'heure de reset
-                    if (!enModeValidation || !nomTacheValidee.equals(t.getNom())) {
-                        afficherEtatValide(t.getNom(), t.getHeureReset());
-                    }
-                    return;
-                } else {
-                    // L'heure de reset est passée, on sort du mode validation
-                    if (enModeValidation) {
-                        enModeValidation = false;
-                        nomTacheValidee = "";
-                    }
-                }
-            }
-
-            // Sortir du mode validation si on était dedans
-            if (enModeValidation) {
-                enModeValidation = false;
-                nomTacheValidee = "";
+            if (t.isEstValidee() && now.isBefore(t.getHeureReset())) {
+                tacheEnCours = t;
+                afficherEtatValide(t.getNom(), t.getHeureReset());
+                return;
             }
 
             boolean estNouvelleTache = (tacheEnCours == null || !tacheEnCours.getNom().equals(t.getNom()));
@@ -265,12 +260,10 @@ public class InterfaceLucienSimple extends Application {
 
         } else {
             // Sortir du mode validation si on était dedans
-            if (enModeValidation) {
-                enModeValidation = false;
-                nomTacheValidee = "";
-            }
-
             tacheEnCours = null;
+            enModeValidation = false;
+            nomTacheValidee = "";
+
             labelNomTache.setText("Rien à faire\npour l'instant 😊");
             labelSousInfo.setText("Profite de ton temps libre !");
             labelSousInfo.setStyle(styleLabel(C_SUBTIL));
