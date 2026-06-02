@@ -25,6 +25,9 @@ public class DashboardServeur {
 
             serveur.createContext("/", this::servirHtml);
             serveur.createContext("/api/data", this::servirJson);
+            serveur.createContext("/api/taches", this::ajouterTacheAPI);      // ← CORRIGÉ
+            serveur.createContext("/api/supprimer", this::supprimerTacheAPI); // ← CORRIGÉ
+            serveur.createContext("/api/modifier", this::modifierTacheAPI);   // ← CORRIGÉ
 
             serveur.setExecutor(null);
             serveur.start();
@@ -48,19 +51,15 @@ public class DashboardServeur {
     // ── Handlers ──────────────────────────────────────────────────────────────
 
     private void servirHtml(HttpExchange exchange) throws IOException {
-        // Affiche le chemin de recherche pour debug
         System.out.println("Recherche du fichier dashboard.html...");
 
-        // Essaye plusieurs méthodes pour charger le fichier
         InputStream is = getClass().getResourceAsStream("/dashboard.html");
 
         if (is == null) {
-            // Essaye avec un chemin différent
             is = getClass().getResourceAsStream("dashboard.html");
         }
 
         if (is == null) {
-            // Essaye de charger depuis le système de fichiers
             try {
                 File file = new File("src/main/resources/dashboard.html");
                 if (file.exists()) {
@@ -78,7 +77,6 @@ public class DashboardServeur {
             is.close();
         } else {
             System.err.println("❌ dashboard.html INTROUVABLE !");
-            // Crée un HTML minimal par défaut
             String htmlMinimal = """
             <!DOCTYPE html>
             <html>
@@ -108,7 +106,6 @@ public class DashboardServeur {
     }
 
     private void servirJson(HttpExchange exchange) throws IOException {
-        // CORS pour dev local
         exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
         exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
 
@@ -120,5 +117,109 @@ public class DashboardServeur {
         try (OutputStream os = exchange.getResponseBody()) {
             os.write(json);
         }
+    }
+
+    // ── CRUD API ──────────────────────────────────────────────────────────────
+
+    private void ajouterTacheAPI(HttpExchange exchange) throws IOException {
+        // Gérer les requêtes OPTIONS (CORS preflight)
+        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+
+        if ("OPTIONS".equals(exchange.getRequestMethod())) {
+            exchange.sendResponseHeaders(204, -1);
+            return;
+        }
+
+        if (!"POST".equals(exchange.getRequestMethod())) {
+            exchange.sendResponseHeaders(405, -1);
+            return;
+        }
+
+        String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        System.out.println("📥 Requête ajout: " + body);
+
+        String nom = extraireValeurJson(body, "nom");
+        String debut = extraireValeurJson(body, "debut");
+        String reset = extraireValeurJson(body, "reset");
+
+        boolean success = tacheManager.ajouterTache(nom, debut, reset);
+
+        String reponse = success ?
+                "{\"success\": true, \"message\": \"Tâche ajoutée avec succès\"}" :
+                "{\"success\": false, \"message\": \"Tâche existe déjà ou erreur\"}";
+
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.sendResponseHeaders(success ? 200 : 400, reponse.length());
+        try (OutputStream os = exchange.getResponseBody()) {
+            os.write(reponse.getBytes());
+        }
+    }
+
+    private void supprimerTacheAPI(HttpExchange exchange) throws IOException {
+        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "POST, OPTIONS");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+
+        if ("OPTIONS".equals(exchange.getRequestMethod())) {
+            exchange.sendResponseHeaders(204, -1);
+            return;
+        }
+
+        String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        System.out.println("📥 Requête suppression: " + body);
+
+        String nom = extraireValeurJson(body, "nom");
+
+        boolean success = tacheManager.supprimerTacheParNom(nom);
+
+        String reponse = success ?
+                "{\"success\": true, \"message\": \"Tâche supprimée\"}" :
+                "{\"success\": false, \"message\": \"Tâche non trouvée\"}";
+
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.sendResponseHeaders(success ? 200 : 404, reponse.length());
+        try (OutputStream os = exchange.getResponseBody()) {
+            os.write(reponse.getBytes());
+        }
+    }
+
+    private void modifierTacheAPI(HttpExchange exchange) throws IOException {
+        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "POST, OPTIONS");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+
+        if ("OPTIONS".equals(exchange.getRequestMethod())) {
+            exchange.sendResponseHeaders(204, -1);
+            return;
+        }
+
+        String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        System.out.println("📥 Requête modification: " + body);
+
+        String ancienNom = extraireValeurJson(body, "ancienNom");
+        String nouveauNom = extraireValeurJson(body, "nouveauNom");
+        String debut = extraireValeurJson(body, "debut");
+        String reset = extraireValeurJson(body, "reset");
+
+        boolean success = tacheManager.modifierTacheParNom(ancienNom, nouveauNom, debut, reset);
+
+        String reponse = success ?
+                "{\"success\": true, \"message\": \"Tâche modifiée\"}" :
+                "{\"success\": false, \"message\": \"Tâche non trouvée\"}";
+
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.sendResponseHeaders(success ? 200 : 404, reponse.length());
+        try (OutputStream os = exchange.getResponseBody()) {
+            os.write(reponse.getBytes());
+        }
+    }
+
+    private String extraireValeurJson(String json, String cle) {
+        String pattern = "\"" + cle + "\"\\s*:\\s*\"([^\"]*)\"";
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
+        java.util.regex.Matcher m = p.matcher(json);
+        return m.find() ? m.group(1) : "";
     }
 }

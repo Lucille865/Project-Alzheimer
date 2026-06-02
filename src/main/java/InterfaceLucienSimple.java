@@ -1,5 +1,6 @@
 import javafx.animation.*;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.geometry.*;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
@@ -55,6 +56,24 @@ public class InterfaceLucienSimple extends Application {
     @Override
     public void start(Stage stage) {
         tacheManager      = new TacheManager();
+
+        // Ajouter un listener pour mettre à jour l'interface quand les tâches changent
+        tacheManager.addListener(() -> {
+            // Rafraîchir l'affichage
+            Platform.runLater(() -> {
+                LocalTime now = LocalTime.now();
+                tacheManager.mettreAJour(now);
+                // Forcer la mise à jour de l'affichage
+                Optional<Tache> active = tacheManager.getTacheActive(now);
+                if (active.isPresent()) {
+                    Tache t = active.get();
+                    tacheEnCours = t;
+                    labelNomTache.setText(t.getNom());
+                    afficherAFaire(t, now);
+                }
+            });
+        });
+
         historiqueManager = new HistoriqueManager();
 
         // Démarre le serveur dashboard

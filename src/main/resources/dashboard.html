@@ -19,6 +19,8 @@
           --rouge:     #b52a2a;
           --rouge-light:#fdeaea;
           --accent:    #3d5a80;
+          --bleu:      #388bfd;
+          --bleu-light:#e6f0ff;
         }
 
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -83,6 +85,46 @@
         @keyframes pulse {
           0%, 100% { opacity: 1; }
           50%       { opacity: 0.3; }
+        }
+
+        /* ── Onglets ── */
+        .tabs {
+          display: flex;
+          gap: 8px;
+          margin-bottom: 28px;
+          border-bottom: 1px solid var(--border);
+          padding-bottom: 12px;
+        }
+
+        .tab-btn {
+          background: transparent;
+          border: none;
+          padding: 10px 24px;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 0.9rem;
+          font-weight: 500;
+          color: var(--muted);
+          cursor: pointer;
+          border-radius: 30px;
+          transition: all 0.2s;
+        }
+
+        .tab-btn:hover {
+          background: var(--bg);
+          color: var(--text);
+        }
+
+        .tab-btn.active {
+          background: var(--accent);
+          color: white;
+        }
+
+        .tab-content {
+          display: none;
+        }
+
+        .tab-content.active {
+          display: block;
         }
 
         /* ── Layout ── */
@@ -299,6 +341,123 @@
         .tag-ok   { background: var(--vert-light);  color: var(--vert); }
         .tag-tard { background: var(--orange-light); color: var(--orange); }
 
+        /* ── Gestion des tâches (NOUVEAU) ── */
+        .form-group {
+          margin-bottom: 20px;
+        }
+        .form-group label {
+          display: block;
+          margin-bottom: 8px;
+          font-weight: 500;
+          color: var(--text);
+        }
+        .form-group input {
+          width: 100%;
+          padding: 12px 16px;
+          border: 1px solid var(--border);
+          border-radius: 12px;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 0.9rem;
+          background: var(--surface);
+        }
+        .form-group input:focus {
+          outline: none;
+          border-color: var(--accent);
+        }
+        .btn {
+          background: var(--accent);
+          color: white;
+          border: none;
+          padding: 12px 24px;
+          border-radius: 30px;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 0.9rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: opacity 0.2s;
+        }
+        .btn:hover {
+          opacity: 0.85;
+        }
+        .btn-danger {
+          background: var(--rouge);
+        }
+        .btn-warning {
+          background: var(--orange);
+        }
+        .btn-success {
+          background: var(--vert);
+        }
+        .message {
+          padding: 12px 16px;
+          border-radius: 12px;
+          margin-bottom: 20px;
+          display: none;
+        }
+        .message.success {
+          background: var(--vert-light);
+          color: var(--vert);
+          display: block;
+        }
+        .message.error {
+          background: var(--rouge-light);
+          color: var(--rouge);
+          display: block;
+        }
+        .tasks-table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+        .tasks-table th, .tasks-table td {
+          padding: 12px;
+          text-align: left;
+          border-bottom: 1px solid var(--border);
+        }
+        .tasks-table th {
+          color: var(--muted);
+          font-weight: 500;
+        }
+        .task-done {
+          opacity: 0.6;
+          text-decoration: line-through;
+        }
+        .edit-mode input {
+          padding: 6px 10px;
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          font-family: 'DM Sans', sans-serif;
+          width: 100px;
+        }
+        .action-buttons {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .small-btn {
+          padding: 4px 10px;
+          font-size: 0.75rem;
+          border-radius: 20px;
+          border: none;
+          cursor: pointer;
+          font-weight: 500;
+        }
+        .small-btn.edit {
+          background: var(--bleu-light);
+          color: var(--bleu);
+        }
+        .small-btn.delete {
+          background: var(--rouge-light);
+          color: var(--rouge);
+        }
+        .small-btn.save {
+          background: var(--vert-light);
+          color: var(--vert);
+        }
+        .small-btn.cancel {
+          background: var(--bg);
+          color: var(--muted);
+        }
+
         /* ── Erreur / chargement ── */
         .empty-state {
           text-align: center;
@@ -315,6 +474,7 @@
           .resume-stat .val { font-size: 1.8rem; }
           .histo-grid { grid-template-columns: repeat(7, 1fr); gap: 4px; }
           .histo-bar-wrap { height: 60px; }
+          .action-buttons { flex-direction: column; }
         }
     </style>
 </head>
@@ -332,48 +492,98 @@
 </header>
 
 <main>
+    <!-- Onglets -->
+    <div class="tabs">
+        <button class="tab-btn active" data-tab="dashboard">📊 Tableau de bord</button>
+        <button class="tab-btn" data-tab="list">📋 Liste des tâches</button>
+        <button class="tab-btn" data-tab="add">➕ Ajouter une tâche</button>
+    </div>
 
-    <!-- Résumé du jour -->
-    <div class="card" id="card-resume">
-        <div class="card-title">📅 Aujourd'hui — <span id="date-label">…</span></div>
+    <!-- Onglet 1 : Dashboard existant (inchangé) -->
+    <div id="dashboard" class="tab-content active">
+        <!-- Résumé du jour -->
+        <div class="card" id="card-resume">
+            <div class="card-title">📅 Aujourd'hui — <span id="date-label">…</span></div>
 
-        <div class="resume-grid">
-            <div class="resume-stat">
-                <div class="val" id="stat-validees">–</div>
-                <div class="lbl">tâches faites</div>
+            <div class="resume-grid">
+                <div class="resume-stat">
+                    <div class="val" id="stat-validees">–</div>
+                    <div class="lbl">tâches faites</div>
+                </div>
+                <div class="resume-stat">
+                    <div class="val" id="stat-total">–</div>
+                    <div class="lbl">tâches au total</div>
+                </div>
+                <div class="resume-stat">
+                    <div class="val" id="stat-pct">–</div>
+                    <div class="lbl">% de réussite</div>
+                </div>
             </div>
-            <div class="resume-stat">
-                <div class="val" id="stat-total">–</div>
-                <div class="lbl">tâches au total</div>
+
+            <div class="progress-wrap">
+                <div class="progress-bar" id="progress-bar" style="width:0%"></div>
             </div>
-            <div class="resume-stat">
-                <div class="val" id="stat-pct">–</div>
-                <div class="lbl">% de réussite</div>
-            </div>
+            <div class="progress-label" id="progress-label"></div>
         </div>
 
-        <div class="progress-wrap">
-            <div class="progress-bar" id="progress-bar" style="width:0%"></div>
+        <!-- Tâches du jour -->
+        <div class="card">
+            <div class="card-title">✅ Tâches de la journée</div>
+            <div id="liste-taches"><div class="empty-state">Chargement…</div></div>
         </div>
-        <div class="progress-label" id="progress-label"></div>
+
+        <!-- Historique 7 jours -->
+        <div class="card">
+            <div class="card-title">📈 Historique des 7 derniers jours</div>
+            <div class="histo-grid" id="histo-grid"></div>
+        </div>
+
+        <!-- Événements validés aujourd'hui -->
+        <div class="card">
+            <div class="card-title">🕐 Validations d'aujourd'hui</div>
+            <div id="evt-list" class="evt-list"><div class="empty-state">Aucune validation pour l'instant.</div></div>
+        </div>
     </div>
 
-    <!-- Tâches du jour -->
-    <div class="card">
-        <div class="card-title">✅ Tâches de la journée</div>
-        <div id="liste-taches"><div class="empty-state">Chargement…</div></div>
+    <!-- Onglet 2 : Liste des tâches (NOUVEAU) -->
+    <div id="list" class="tab-content">
+        <div class="card">
+            <div class="card-title">📋 Toutes les tâches</div>
+            <div id="messageList" class="message"></div>
+            <div style="overflow-x: auto;">
+                <table class="tasks-table" id="tasksTable">
+                    <thead>
+                    <tr><th>Nom</th><th>Horaire</th><th>Statut</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody id="tasksList"></tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
-    <!-- Historique 7 jours -->
-    <div class="card">
-        <div class="card-title">📈 Historique des 7 derniers jours</div>
-        <div class="histo-grid" id="histo-grid"></div>
-    </div>
-
-    <!-- Événements validés aujourd'hui -->
-    <div class="card">
-        <div class="card-title">🕐 Validations d'aujourd'hui</div>
-        <div id="evt-list" class="evt-list"><div class="empty-state">Aucune validation pour l'instant.</div></div>
+    <!-- Onglet 3 : Ajouter une tâche (NOUVEAU) -->
+    <div id="add" class="tab-content">
+        <div class="card">
+            <div class="card-title">➕ Ajouter une nouvelle tâche</div>
+            <div id="messageAdd" class="message"></div>
+            <form id="addForm">
+                <div class="form-group">
+                    <label>📌 Nom de la tâche</label>
+                    <input type="text" id="taskName" required placeholder="Ex: Prendre médicaments">
+                </div>
+                <div class="form-group">
+                    <label>⏰ Heure de début (HH:MM)</label>
+                    <input type="time" id="startTime" required>
+                </div>
+                <div class="form-group">
+                    <label>⏰ Heure limite (HH:MM)</label>
+                    <input type="time" id="endTime" required>
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-success">✅ Ajouter la tâche</button>
+                </div>
+            </form>
+        </div>
     </div>
 
 </main>
@@ -390,10 +600,22 @@
     }
 
     function fmtHeure(iso) {
-      // iso = "yyyy-MM-dd HH:mm:ss"
       return iso ? iso.slice(11, 16) : '';
     }
 
+    // Gestion des onglets
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            btn.classList.add('active');
+            const tabId = btn.getAttribute('data-tab');
+            document.getElementById(tabId).classList.add('active');
+            if (tabId === 'list') chargerListeTaches();
+        });
+    });
+
+    // Fonction pour charger les données du dashboard (existant)
     async function charger() {
       let data;
       try {
@@ -410,7 +632,7 @@
       const histo7  = data.historique_7j   || [];
       const evts    = auj.evenements        || [];
 
-      // ── Résumé ────────────────────────────────────────────────────────────
+      // ── Résumé ──
       document.getElementById('date-label').textContent    = fmtDate(auj.date);
       document.getElementById('stat-validees').textContent = auj.validees;
       document.getElementById('stat-total').textContent    = auj.total;
@@ -420,12 +642,11 @@
         auj.validees + ' tâche' + (auj.validees > 1 ? 's' : '') + ' effectuée' +
         (auj.validees > 1 ? 's' : '') + ' sur ' + auj.total;
 
-      // ── Tâches du jour ────────────────────────────────────────────────────
+      // ── Tâches du jour ──
       const listEl = document.getElementById('liste-taches');
       if (!taches.length) {
         listEl.innerHTML = '<div class="empty-state">Aucune tâche configurée.</div>';
       } else {
-        // Trouver si une tâche a été validée avec retard
         const valideesTardMap = {};
         evts.forEach(e => { if (e.enRetard) valideesTardMap[e.tache] = true; });
 
@@ -454,7 +675,7 @@
         }).join('');
       }
 
-      // ── Historique 7 jours ────────────────────────────────────────────────
+      // ── Historique 7 jours ──
       const maxVal = Math.max(...histo7.map(j => j.validees), 1);
       const histoEl = document.getElementById('histo-grid');
       histoEl.innerHTML = histo7.map(j => {
@@ -471,7 +692,7 @@
           </div>`;
       }).join('');
 
-      // ── Événements du jour ────────────────────────────────────────────────
+      // ── Événements du jour ──
       const evtEl = document.getElementById('evt-list');
       if (!evts.length) {
         evtEl.innerHTML = '<div class="empty-state">Aucune validation enregistrée pour l\'instant.</div>';
@@ -487,8 +708,216 @@
       }
     }
 
+    // Charger la liste des tâches (pour l'onglet gestion)
+    let tasksList = [];
+
+    async function chargerListeTaches() {
+        try {
+            const response = await fetch('/api/data');
+            const data = await response.json();
+            tasksList = data.taches_du_jour || [];
+            afficherTableauTaches();
+        } catch (error) {
+            console.error('Erreur:', error);
+            document.getElementById('tasksList').innerHTML =
+                '<tr><td colspan="4" class="empty-state">Erreur de chargement</td></tr>';
+        }
+    }
+
+    function afficherTableauTaches() {
+        const tbody = document.getElementById('tasksList');
+        if (!tbody) return;
+
+        if (!tasksList.length) {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Aucune tâche configurée</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+
+        tasksList.forEach((tache, index) => {
+            const row = tbody.insertRow();
+            if (tache.validee) row.classList.add('task-done');
+
+            // Nom
+            const cellNom = row.insertCell(0);
+            if (tache.editMode) {
+                cellNom.innerHTML = `<input type="text" id="editNom_${index}" value="${escapeHtml(tache.nom)}" style="width:120px;">`;
+            } else {
+                cellNom.innerHTML = escapeHtml(tache.nom);
+            }
+
+            // Plage horaire
+            const cellPlage = row.insertCell(1);
+            if (tache.editMode) {
+                const parts = tache.plage.split(' – ');
+                const debut = parts[0] || '';
+                const fin = parts[1] || '';
+                cellPlage.innerHTML = `
+                    <input type="time" id="editDebut_${index}" value="${debut}" style="width:100px;">
+                    à
+                    <input type="time" id="editFin_${index}" value="${fin}" style="width:100px;">
+                `;
+            } else {
+                cellPlage.innerHTML = tache.plage;
+            }
+
+            // Statut
+            const cellStatut = row.insertCell(2);
+            cellStatut.innerHTML = tache.validee ? '✅ Fait' : '⏳ À faire';
+
+            // Actions
+            const cellActions = row.insertCell(3);
+            if (tache.editMode) {
+                cellActions.innerHTML = `
+                    <div class="action-buttons">
+                        <button class="small-btn save" onclick="sauvegarderModification(${index})">💾 Sauver</button>
+                        <button class="small-btn cancel" onclick="annulerModification(${index})">❌ Annuler</button>
+                    </div>
+                `;
+            } else {
+                cellActions.innerHTML = `
+                    <div class="action-buttons">
+                        <button class="small-btn edit" onclick="activerEdition(${index})">✏️ Modifier</button>
+                        <button class="small-btn delete" onclick="supprimerTache('${escapeHtml(tache.nom)}')">🗑️ Supprimer</button>
+                    </div>
+                `;
+            }
+        });
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+
+    function activerEdition(index) {
+        tasksList[index].editMode = true;
+        afficherTableauTaches();
+    }
+
+    function annulerModification(index) {
+        delete tasksList[index].editMode;
+        afficherTableauTaches();
+    }
+
+    async function sauvegarderModification(index) {
+        const nouveauNom = document.getElementById(`editNom_${index}`).value;
+        const debut = document.getElementById(`editDebut_${index}`).value;
+        const fin = document.getElementById(`editFin_${index}`).value;
+
+        try {
+            const response = await fetch('/api/modifier', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ancienNom: tasksList[index].nom,
+                    nouveauNom: nouveauNom,
+                    debut: debut,
+                    reset: fin
+                })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                delete tasksList[index].editMode;
+                showMessage('list', '✅ Tâche modifiée avec succès', 'success');
+                chargerListeTaches();
+                charger(); // Rafraîchir le dashboard
+            } else {
+                showMessage('list', '❌ Erreur lors de la modification', 'error');
+            }
+        } catch (error) {
+            showMessage('list', '❌ Erreur réseau', 'error');
+        }
+    }
+
+    async function supprimerTache(nom) {
+        if (!confirm(`Supprimer la tâche "${nom}" ?`)) return;
+
+        try {
+            const response = await fetch('/api/supprimer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nom: nom })
+            });
+
+            if (response.ok) {
+                showMessage('list', '🗑️ Tâche supprimée', 'success');
+                chargerListeTaches();
+                charger(); // Rafraîchir le dashboard
+            } else {
+                showMessage('list', '❌ Erreur lors de la suppression', 'error');
+            }
+        } catch (error) {
+            showMessage('list', '❌ Erreur réseau', 'error');
+        }
+    }
+
+    // Ajout d'une tâche
+    document.getElementById('addForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const nom = document.getElementById('taskName').value;
+        const debut = document.getElementById('startTime').value;
+        const reset = document.getElementById('endTime').value;
+
+        if (!nom || !debut || !reset) {
+            showMessage('add', '❌ Veuillez remplir tous les champs', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/taches', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nom: nom, debut: debut, reset: reset })
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                showMessage('add', '✅ Tâche ajoutée avec succès !', 'success');
+                document.getElementById('addForm').reset();
+                chargerListeTaches();
+                charger(); // Rafraîchir le dashboard
+                // Optionnel : basculer vers l'onglet liste
+                setTimeout(() => {
+                    document.querySelector('.tab-btn[data-tab="list"]').click();
+                }, 1500);
+            } else {
+                showMessage('add', '❌ ' + (result.message || 'Erreur lors de l\'ajout'), 'error');
+            }
+        } catch (error) {
+            showMessage('add', '❌ Erreur réseau', 'error');
+        }
+    });
+
+    function showMessage(tab, message, type) {
+        const msgDiv = document.getElementById(`message${tab === 'list' ? 'List' : 'Add'}`);
+        if (msgDiv) {
+            msgDiv.textContent = message;
+            msgDiv.className = `message ${type}`;
+            setTimeout(() => {
+                msgDiv.style.display = 'none';
+                msgDiv.className = 'message';
+            }, 3000);
+        }
+    }
+
+    // Lancement
     charger();
-    setInterval(charger, 10000); // rafraîchissement toutes les 10 secondes
+    setInterval(charger, 10000);
+    setInterval(() => {
+        if (document.getElementById('list').classList.contains('active')) {
+            chargerListeTaches();
+        }
+    }, 5000);
 </script>
 </body>
 </html>

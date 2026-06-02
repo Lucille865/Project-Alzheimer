@@ -1,55 +1,121 @@
 import java.io.*;
-import java.nio.file.*;
+import java.nio.file.Files;
 import java.time.LocalTime;
 import java.util.*;
 
 public class TacheManager {
-
+    private List<Tache> taches;
+    private List<TacheChangeListener> listeners = new ArrayList<>();
     private static final String FICHIER_TACHES = "taches.json";
-    private final List<Tache> taches = new ArrayList<>();
+
+    // Interface pour notifier les changements (pour l'interface JavaFX)
+    public interface TacheChangeListener {
+        void onTachesChanged();
+    }
+
+    public void addListener(TacheChangeListener listener) {
+        listeners.add(listener);
+    }
+
+    private void notifierChangement() {
+        for (TacheChangeListener listener : listeners) {
+            listener.onTachesChanged();
+        }
+    }
 
     public TacheManager() {
-        chargerTaches();
+        taches = new ArrayList<>();
+        chargerTaches();  // Charge depuis le fichier JSON
     }
 
-    // ── Accès ─────────────────────────────────────────────────────────────────
+    // ── CRUD tâches (MODIFIÉ pour utiliser votre persistance) ─────────────────
 
-    public Optional<Tache> getTacheActive(LocalTime now) {
-        return taches.stream().filter(t -> t.estActive(now)).findFirst();
-    }
+    public boolean ajouterTache(String nom, String heureDebut, String heureReset) {
+        // Vérifier les doublons
+        for (Tache t : taches) {
+            if (t.getNom().equalsIgnoreCase(nom)) {
+                return false;
+            }
+        }
 
-    public void mettreAJour(LocalTime now) {
-        taches.forEach(t -> t.verifierReset(now));
-    }
-
-    public long getNbValidees()    { return taches.stream().filter(Tache::isEstValidee).count(); }
-    public int  getNbTotal()       { return taches.size(); }
-    public List<Tache> getTaches() { return Collections.unmodifiableList(taches); }
-
-    // ── CRUD tâches ───────────────────────────────────────────────────────────
-
-    public void ajouterTache(String nom, String heureDebut, String heureReset) {
-        taches.add(new Tache(nom, heureDebut, heureReset));
+        Tache nouvelleTache = new Tache(nom, heureDebut, heureReset);
+        taches.add(nouvelleTache);
         taches.sort(Comparator.comparing(Tache::getHeureDebut));
-        sauvegarderTaches();
+        sauvegarderTaches();  // Sauvegarde dans le fichier JSON
+        notifierChangement();
+        return true;
     }
 
     public boolean modifierTache(int index, String nom, String heureDebut, String heureReset) {
         if (index < 0 || index >= taches.size()) return false;
-        taches.set(index, new Tache(nom, heureDebut, heureReset));
+
+        // Conserver l'état de validation si le nom n'a pas changé
+        boolean etaitValidee = taches.get(index).isEstValidee();
+        Tache nouvelleTache = new Tache(nom, heureDebut, heureReset);
+        if (etaitValidee && taches.get(index).getNom().equals(nom)) {
+            nouvelleTache.valider();
+        }
+
+        taches.set(index, nouvelleTache);
         taches.sort(Comparator.comparing(Tache::getHeureDebut));
         sauvegarderTaches();
+        notifierChangement();
         return true;
+    }
+
+    public boolean modifierTacheParNom(String ancienNom, String nouveauNom, String heureDebut, String heureReset) {
+        for (int i = 0; i < taches.size(); i++) {
+            if (taches.get(i).getNom().equalsIgnoreCase(ancienNom)) {
+                return modifierTache(i, nouveauNom, heureDebut, heureReset);
+            }
+        }
+        return false;
     }
 
     public boolean supprimerTache(int index) {
         if (index < 0 || index >= taches.size()) return false;
         taches.remove(index);
         sauvegarderTaches();
+        notifierChangement();
         return true;
     }
 
-    // ── Persistance ───────────────────────────────────────────────────────────
+    public boolean supprimerTacheParNom(String nom) {
+        for (int i = 0; i < taches.size(); i++) {
+            if (taches.get(i).getNom().equalsIgnoreCase(nom)) {
+                return supprimerTache(i);
+            }
+        }
+        return false;
+    }
+
+    public List<Tache> getTaches() {
+        return new ArrayList<>(taches); // Retourne une copie immuable
+    }
+
+    public int getNbTotal() {
+        return taches.size();
+    }
+
+    public long getNbValidees() {
+        return taches.stream().filter(Tache::isEstValidee).count();
+    }
+
+    public void mettreAJour(LocalTime now) {
+        for (Tache t : taches) {
+            t.verifierReset(now);
+        }
+    }
+
+    public Optional<Tache> getTacheActive(LocalTime now) {
+        return taches.stream()
+                .filter(t -> !t.isEstValidee())
+                .filter(t -> !now.isBefore(t.getHeureDebut()))
+                .filter(t -> now.isBefore(t.getHeureReset()))
+                .findFirst();
+    }
+
+    // ── Persistance (VOTRE CODE, inchangé) ───────────────────────────────────
 
     public void sauvegarderTaches() {
         StringBuilder sb = new StringBuilder("[");
@@ -66,6 +132,7 @@ public class TacheManager {
 
         try (PrintWriter pw = new PrintWriter(new FileWriter(FICHIER_TACHES))) {
             pw.print(sb);
+            System.out.println("💾 Tâches sauvegardées dans " + FICHIER_TACHES);
         } catch (IOException e) {
             System.err.println("[TacheManager] Erreur sauvegarde : " + e.getMessage());
         }
@@ -74,6 +141,7 @@ public class TacheManager {
     private void chargerTaches() {
         File f = new File(FICHIER_TACHES);
         if (!f.exists()) {
+            System.out.println("📁 Fichier " + FICHIER_TACHES + " introuvable, chargement des tâches par défaut");
             chargerTachesParDefaut();
             sauvegarderTaches();
             return;
@@ -81,7 +149,13 @@ public class TacheManager {
         try {
             String json = Files.readString(f.toPath());
             parseTaches(json);
-            if (taches.isEmpty()) chargerTachesParDefaut();
+            if (taches.isEmpty()) {
+                System.out.println("📁 Fichier vide, chargement des tâches par défaut");
+                chargerTachesParDefaut();
+                sauvegarderTaches();
+            } else {
+                System.out.println("📋 " + taches.size() + " tâches chargées depuis " + FICHIER_TACHES);
+            }
         } catch (IOException e) {
             System.err.println("[TacheManager] Erreur lecture, tâches par défaut chargées.");
             chargerTachesParDefaut();
@@ -98,6 +172,7 @@ public class TacheManager {
         taches.add(new Tache("Boire un verre d'eau",         "16:00", "17:00"));
         taches.add(new Tache("Prendre sa douche",            "18:00", "20:00"));
         taches.add(new Tache("Dîner",                        "19:30", "21:30"));
+        System.out.println("📋 Tâches par défaut chargées");
     }
 
     private void parseTaches(String json) {
