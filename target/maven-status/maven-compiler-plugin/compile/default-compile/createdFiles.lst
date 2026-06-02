@@ -1,7 +1,9 @@
+TacheManager.class
+InterfaceLucienSimple$1.class
 InterfaceLucien.class
+InterfaceLucienSimple$NodeUI.class
 Main.class
 Tache.class
 EvenementTache.class
-TacheManager.class
 DashboardServeur.class
 HistoriqueManager.class

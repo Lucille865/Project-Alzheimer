@@ -4,11 +4,11 @@
 // --- CONFIGURATION RÉSEAU ---
 const char* ssid     = "S23 FE de Maxence";
 const char* password = "7jfptc984ypn7i8";
-const char* serverUrl = "http://10.37.102.230:8081/bouton"; 
+const char* serverUrl = "http://10.82.39.230:8081/bouton"; 
 
 // --- PINS ---
 const int ledRouge = 1;  
-const int ledVerte = 42; 
+const int ledVerte = 14; 
 const int bouton   = 2;   
 bool etatPrecedent = HIGH;
 

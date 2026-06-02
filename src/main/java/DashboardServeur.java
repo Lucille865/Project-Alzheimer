@@ -11,7 +11,7 @@ public class DashboardServeur {
     private final HistoriqueManager historiqueManager;
     private HttpServer             serveur;
 
-    private static final int PORT = 8082;
+    private static final int PORT = 8080;
 
     public DashboardServeur(TacheManager tm, HistoriqueManager hm) {
         this.tacheManager    = tm;

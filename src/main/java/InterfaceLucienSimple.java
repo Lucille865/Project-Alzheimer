@@ -13,6 +13,12 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import javafx.application.Platform;
+import com.sun.net.httpserver.HttpServer;
+
 /**
  * Interface simplifiée pour la tablette de Lucien.
  */
@@ -36,6 +42,8 @@ public class InterfaceLucienSimple extends Application {
     private DashboardServeur dashboardServeur;
     private Tache tacheEnCours = null;
     private long offsetMinutes = 0;
+
+    private HttpServer serveurWiFi;
 
     // NOUVEAU : Flag pour savoir si on est en mode validation
     private boolean enModeValidation = false;
@@ -66,6 +74,8 @@ public class InterfaceLucienSimple extends Application {
         stage.setScene(scene);
         stage.setFullScreen(true);
         stage.show();
+
+        lancerServeurWiFi();
 
         demarrerHorloge();
     }
@@ -431,11 +441,52 @@ public class InterfaceLucienSimple extends Application {
     // ── Classe interne pour le retour de l'UI ────────────────────────────────
     private record NodeUI(VBox root) {}
 
+    // ── Serveur Wi-Fi (Bouton Physique Arduino) ────────────────────
+
+    private void lancerServeurWiFi() {
+        try {
+            // Le port 8082 est réservé à l'Arduino (le 8080 ou 8081 est pour le Dashboard)
+            serveurWiFi = HttpServer.create(new InetSocketAddress(8082), 0);
+            serveurWiFi.createContext("/bouton", exchange -> {
+                String query = exchange.getRequestURI().getQuery();
+
+                if (query != null && query.contains("action=valider")) {
+                    // Platform.runLater est obligatoire pour interagir avec l'interface JavaFX depuis le réseau
+                    Platform.runLater(this::actionValidation);
+                    System.out.println("[WIFI] Validation reçue du bouton physique !");
+                }
+
+                // Réponse lue par l'Arduino pour allumer ses LEDs (V = Vert, R = Rouge, X = Éteint)
+                String signal = "X";
+                if (tacheEnCours != null) {
+                    signal = tacheEnCours.isEstValidee() ? "V" : "R";
+                }
+
+                exchange.sendResponseHeaders(200, signal.length());
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(signal.getBytes());
+                }
+            });
+            serveurWiFi.setExecutor(null);
+            serveurWiFi.start();
+            System.out.println("[SERVEUR] Wi-Fi Arduino actif sur le port 8082");
+        } catch (IOException e) {
+            System.err.println("[SERVEUR] Erreur Wi-Fi : " + e.getMessage());
+        }
+    }
+
+
+
+
     // ── Arrêt de l'application ───────────────────────────────────────────────
     @Override
     public void stop() {
         if (dashboardServeur != null) {
             dashboardServeur.arreter();
+        }
+        if (serveurWiFi != null) {
+            serveurWiFi.stop(0);
+            System.out.println("[MATÉRIEL] Serveur Wi-Fi Arduino arrêté.");
         }
     }
 
