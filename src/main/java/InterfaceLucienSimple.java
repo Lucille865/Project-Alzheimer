@@ -145,11 +145,11 @@ public class InterfaceLucienSimple extends Application {
         appliquerStyleBouton(btnAide, C_BLEU);
         btnAide.setOnAction(e -> afficherAide());
 
-        HBox headerBar = new HBox(230);
+        HBox headerBar = new HBox(450);
         headerBar.setAlignment(Pos.CENTER_RIGHT);
         headerBar.setPadding(new Insets(20, 30, 0, 30));
         headerBar.getChildren().addAll(btnValider, btnAide);
-        HBox.setMargin(btnAide, new Insets(0, 500, 0, 0));
+        HBox.setMargin(btnAide, new Insets(0, 430, 0, 0));
 
         // Racine
         VBox root = new VBox(bandeauCouleur, headerBar, centre, pied);
@@ -309,8 +309,6 @@ public class InterfaceLucienSimple extends Application {
                 .between(tacheEnCours.getHeureDebut(), LocalTime.now().plusMinutes(offsetMinutes)) > 30;
         historiqueManager.enregistrerValidation(tacheEnCours, enRetard);
 
-        SonRappel.jouerSonValidation();
-
         // Animation du bouton
         ScaleTransition pulse = new ScaleTransition(Duration.millis(140), btnOui);
         pulse.setFromX(1.0);
@@ -351,6 +349,7 @@ public class InterfaceLucienSimple extends Application {
         aide.getDialogPane().setMinHeight(600);
         aide.getDialogPane().setMinWidth(550);
         aide.getDialogPane().setStyle("-fx-font-size: 13px;");
+        SonRappel.jouerSonAide();
         aide.showAndWait();
     }
 

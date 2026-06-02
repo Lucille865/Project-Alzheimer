@@ -10,6 +10,7 @@ public class SonRappel {
 
     private static AudioClip sonActivation;
     private static AudioClip sonRappel;
+    private static AudioClip sonAide;
     private static boolean sonsActives = true;
 
     // Initialisation statique des sons
@@ -24,21 +25,18 @@ public class SonRappel {
         try {
             // Son d'activation (quand une tâche devient active)
             URL urlActivation = SonRappel.class.getResource("/sounds/Audio-petite-fille-1.wav");
-            if (urlActivation != null) {
-                sonActivation = new AudioClip(urlActivation.toString());
-                System.out.println("✅ Son d'activation chargé");
-            } else {
-                System.err.println("❌ Fichier activation.wav introuvable");
-            }
+            sonActivation = new AudioClip(urlActivation.toString());
+            System.out.println("✅ Son d'activation chargé");
 
             // Son de rappel (30 minutes)
             URL urlRappel = SonRappel.class.getResource("/sounds/Audio-petite-fille-2.wav");
-            if (urlRappel != null) {
-                sonRappel = new AudioClip(urlRappel.toString());
-                System.out.println("✅ Son de rappel chargé");
-            } else {
-                System.err.println("❌ Fichier rappel.wav introuvable");
-            }
+            sonRappel = new AudioClip(urlRappel.toString());
+            System.out.println("✅ Son de rappel chargé");
+
+            // Son d'aide
+            URL urlAide = SonRappel.class.getResource("/sounds/Audio-aide.wav");
+            sonAide = new AudioClip(urlAide.toString());
+            System.out.println("✅ Son d'aide chargé");
 
         } catch (Exception e) {
             System.err.println("❌ Erreur lors du chargement des sons: " + e.getMessage());
@@ -74,12 +72,17 @@ public class SonRappel {
     }
 
     /**
-     * Joue le son de validation (quand on appuie sur OUI)
-     * Optionnel : vous pouvez ajouter un troisième son
+     * Joue le son d'aide
      */
-    public static void jouerSonValidation() {
-        // Vous pouvez ajouter un son validation.wav si vous voulez
-        System.out.println("✓ Validation effectuée");
+    public static void jouerSonAide() {
+        if (!sonsActives) return;
+
+        if (sonAide != null) {
+            sonAide.play();
+            System.out.println("🔊 Son d'aide joué");
+        } else {
+            System.out.println("[SON] Aide (fichier manquant)");
+        }
     }
 
     /**
