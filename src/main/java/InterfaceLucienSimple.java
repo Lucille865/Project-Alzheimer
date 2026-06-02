@@ -21,7 +21,6 @@ import java.net.URI;
 /**
  * Interface simplifiée pour la tablette de Lucien.
  * – Tâche courante en très grand
- * – Un seul bouton OUI (vert = à faire, gris = déjà fait)
  * – Touche Entrée = clic sur le bouton
  * – Rappel sonore automatique 30 min après le début si non validée
  */
@@ -44,6 +43,8 @@ public class InterfaceLucienSimple extends Application {
     private HistoriqueManager historiqueManager;
     private DashboardServeur dashboardServeur;
     private Tache           tacheEnCours = null;
+    private long            offsetMinutes = 0;  // décalage horaire pour simulation
+    private Label           labelOffsetInfo; // affichage du décalage
 
     // ── Composants ───────────────────────────────────────────────────────────
     private Label  labelHeure;
@@ -52,28 +53,16 @@ public class InterfaceLucienSimple extends Application {
     private Button btnOui;
     private Button btnAide;  // NOUVEAU : bouton d'aide
     private Region bandeauCouleur;
+    private Label creerLabelOffset() {
+        Label label = new Label();
+        label.setStyle("-fx-font-size: 16px; -fx-text-fill: " + C_SUBTIL + ";");
+        label.setAlignment(Pos.CENTER);
+        return label;
+    }
 
     @Override
     public void start(Stage stage) {
         tacheManager      = new TacheManager();
-
-        // Ajouter un listener pour mettre à jour l'interface quand les tâches changent
-        tacheManager.addListener(() -> {
-            // Rafraîchir l'affichage
-            Platform.runLater(() -> {
-                LocalTime now = LocalTime.now();
-                tacheManager.mettreAJour(now);
-                // Forcer la mise à jour de l'affichage
-                Optional<Tache> active = tacheManager.getTacheActive(now);
-                if (active.isPresent()) {
-                    Tache t = active.get();
-                    tacheEnCours = t;
-                    labelNomTache.setText(t.getNom());
-                    afficherAFaire(t, now);
-                }
-            });
-        });
-
         historiqueManager = new HistoriqueManager();
 
         // Démarre le serveur dashboard
@@ -89,12 +78,16 @@ public class InterfaceLucienSimple extends Application {
         // ── Heure (agrandie) ───────────────────────────────────────────────
         labelHeure = new Label("00:00");
         labelHeure.setStyle(
-                "-fx-font-size: 96px;" +
+                "-fx-font-size: 72px;" +
                         "-fx-font-weight: bold;" +
                         "-fx-text-fill: " + C_TEXTE + ";" +
                         "-fx-font-family: 'Arial';"
         );
         labelHeure.setAlignment(Pos.CENTER);
+
+        // ── Label info décalage ──────────────────────────────────
+        labelOffsetInfo = creerLabelOffset();
+        mettreAJourAffichageOffset();
 
         // ── Nom de la tâche ───────────────────────────────────────────────
         labelNomTache = creerLabel("Chargement…", 64, true, C_TEXTE);
@@ -112,8 +105,22 @@ public class InterfaceLucienSimple extends Application {
         stylesBouton(C_VERT);
         btnOui.setOnAction(e -> actionValidation());
 
-        // ── NOUVEAU : Bouton Aide ─────────────────────────────────────────
-        btnAide = new Button("❓ Aide");
+        // ── Zone centrale ─────────────────────────────────────────────────
+        VBox centre = new VBox(20, labelHeure, labelOffsetInfo, labelNomTache, labelSousInfo, btnOui);
+        centre.setAlignment(Pos.CENTER);
+        VBox.setVgrow(centre, Priority.ALWAYS);
+
+        // ── Salutation en bas ─────────────────────────────────────────────
+        Label pied = creerLabel(
+                "Appuie sur le bouton quand tu as fait la tâche 😊\n\n" +
+                        "← → : avancer/reculer de 15 min    ↑ : réinitialiser l'heure",
+                16, false, C_SUBTIL
+        );
+        pied.setPadding(new Insets(0, 0, 36, 0));
+        pied.setTextAlignment(TextAlignment.CENTER);
+
+        // ── Barre du haut avec bouton aide ─────────────────────────────────
+        Button btnAide = new Button("❓ Aide");
         btnAide.setPrefSize(100, 50);
         btnAide.setStyle(
                 "-fx-background-color: " + C_BLEU + ";" +
@@ -125,28 +132,10 @@ public class InterfaceLucienSimple extends Application {
         );
         btnAide.setOnAction(e -> afficherAide());
 
-        // ── Barre du haut avec heure et bouton aide ───────────────────────
         HBox headerBar = new HBox();
         headerBar.setAlignment(Pos.CENTER_RIGHT);
         headerBar.setPadding(new Insets(20, 30, 0, 30));
         headerBar.getChildren().add(btnAide);
-
-        // Conteneur pour l'heure centrée
-        VBox heureContainer = new VBox(labelHeure);
-        heureContainer.setAlignment(Pos.CENTER);
-        VBox.setVgrow(heureContainer, Priority.ALWAYS);
-
-        // ── Zone centrale ─────────────────────────────────────────────────
-        VBox centre = new VBox(32, heureContainer, labelNomTache, labelSousInfo, btnOui);
-        centre.setAlignment(Pos.CENTER);
-        VBox.setVgrow(centre, Priority.ALWAYS);
-
-        // ── Salutation en bas ─────────────────────────────────────────────
-        Label pied = creerLabel(
-                "Appuie sur le bouton quand tu as fait la tâche 😊",
-                20, false, C_SUBTIL
-        );
-        pied.setPadding(new Insets(0, 0, 36, 0));
 
         // ── Racine ────────────────────────────────────────────────────────
         VBox root = new VBox(bandeauCouleur, headerBar, centre, pied);
@@ -156,16 +145,59 @@ public class InterfaceLucienSimple extends Application {
 
         Scene scene = new Scene(root, 700, 900);
 
-        // ── Touche Entrée = clic OUI ──────────────────────────────────────
+        // ── Raccourcis clavier (CORRIGÉS) ─────────────────────────────────────────
         scene.setOnKeyPressed(event -> {
-            if (event.getCode() == KeyCode.ENTER) {
-                if (!btnOui.isDisabled()) btnOui.fire();
+            KeyCode code = event.getCode();
+
+            System.out.println("Touche pressée: " + code); // Debug
+
+            // Flèche droite = +15 minutes
+            if (code == KeyCode.RIGHT) {
+                offsetMinutes += 15;
+                mettreAJourAffichageOffset();
+                rafraichirAffichageTache();
+                System.out.println("⏩ +15 min : décalage = " + offsetMinutes + " min");
+                event.consume(); // Empêche la propagation
             }
-            // Nouveau : touche F1 ou A pour ouvrir l'aide
-            if (event.getCode() == KeyCode.F1 || event.getCode() == KeyCode.A) {
+            // Flèche gauche = -15 minutes
+            else if (code == KeyCode.LEFT) {
+                offsetMinutes -= 15;
+                if (offsetMinutes < 0) offsetMinutes = 0;
+                mettreAJourAffichageOffset();
+                rafraichirAffichageTache();
+                System.out.println("⏪ -15 min : décalage = " + offsetMinutes + " min");
+                event.consume();
+            }
+            // Flèche haut = réinitialiser l'heure
+            else if (code == KeyCode.UP) {
+                offsetMinutes = 0;
+                mettreAJourAffichageOffset();
+                rafraichirAffichageTache();
+                System.out.println("🔄 Réinitialisation de l'heure");
+                event.consume();
+            }
+            // Entrée = valider la tâche
+            else if (code == KeyCode.ENTER) {
+                if (!btnOui.isDisabled()) {
+                    System.out.println("✅ Validation par Entrée");
+                    actionValidation();
+                }
+                event.consume();
+            }
+            // Touche A ou F1 pour l'aide
+            else if (code == KeyCode.F1 || code == KeyCode.A) {
+                System.out.println("❓ Ouverture aide");
                 afficherAide();
+                event.consume();
             }
         });
+
+        // Désactiver le traversée du focus pour les boutons
+        btnOui.setFocusTraversable(false);
+        btnAide.setFocusTraversable(false);
+
+        // Important: S'assurer que le root peut recevoir le focus
+        root.setFocusTraversable(false);
 
         stage.setTitle("MémoGuide – Lucien");
         stage.setScene(scene);
@@ -216,7 +248,8 @@ public class InterfaceLucienSimple extends Application {
 
     private void demarrerHorloge() {
         Timeline horloge = new Timeline(new KeyFrame(Duration.seconds(1), e -> {
-            LocalTime now = LocalTime.now();
+            // UTILISER L'HEURE SIMULÉE au lieu de l'heure réelle
+            LocalTime now = LocalTime.now().plusMinutes(offsetMinutes);
             labelHeure.setText(now.format(FMT));
 
             tacheManager.mettreAJour(now);
@@ -308,6 +341,52 @@ public class InterfaceLucienSimple extends Application {
         pulse.setCycleCount(2);
         pulse.setOnFinished(e -> afficherValide());
         pulse.play();
+    }
+
+    private void mettreAJourAffichageOffset() {
+        if (labelOffsetInfo != null) {
+            if (offsetMinutes == 0) {
+                labelOffsetInfo.setText("🕐 Heure réelle");
+                labelOffsetInfo.setStyle("-fx-font-size: 16px; -fx-text-fill: " + C_SUBTIL + ";");
+            } else {
+                long heures = offsetMinutes / 60;
+                long minutes = offsetMinutes % 60;
+                String decalage = "";
+                if (heures > 0) decalage += heures + "h ";
+                if (minutes > 0) decalage += minutes + "min";
+                labelOffsetInfo.setText("⏰ Simulation : +" + decalage + " (← → pour ajuster, ↑ pour reset)");
+                labelOffsetInfo.setStyle("-fx-font-size: 16px; -fx-text-fill: " + C_ORANGE + ";");
+            }
+        }
+    }
+
+    private void rafraichirAffichageTache() {
+        // Utiliser la même logique que l'horloge
+        LocalTime nowSimulee = LocalTime.now().plusMinutes(offsetMinutes);
+        labelHeure.setText(nowSimulee.format(FMT));
+
+        tacheManager.mettreAJour(nowSimulee);
+        Optional<Tache> active = tacheManager.getTacheActive(nowSimulee);
+
+        if (active.isPresent()) {
+            Tache t = active.get();
+            tacheEnCours = t;
+            labelNomTache.setText(t.getNom());
+
+            if (t.isEstValidee()) {
+                afficherValide();
+            } else {
+                afficherAFaire(t, nowSimulee);
+            }
+        } else {
+            tacheEnCours = null;
+            labelNomTache.setText("Rien à faire\npour l'instant 😊");
+            labelSousInfo.setText("Profite de ton temps libre !");
+            labelSousInfo.setStyle(styleLabel(C_SUBTIL));
+            stylesBouton(C_GRIS);
+            bandeauCouleur.setStyle("-fx-background-color: " + C_GRIS + ";");
+            btnOui.setDisable(true);
+        }
     }
 
     @Override
