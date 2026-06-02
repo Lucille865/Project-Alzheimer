@@ -15,10 +15,6 @@ import java.util.Optional;
 
 /**
  * Interface simplifiée pour la tablette de Lucien.
- * – Tâche courante en très grand
- * – Touche Entrée = clic sur le bouton
- * – Rappel sonore automatique 30 min après le début si non validée
- * – Flèches directionnelles pour simuler l'avancement du temps
  */
 public class InterfaceLucienSimple extends Application {
 
@@ -39,7 +35,11 @@ public class InterfaceLucienSimple extends Application {
     private HistoriqueManager historiqueManager;
     private DashboardServeur dashboardServeur;
     private Tache tacheEnCours = null;
-    private long offsetMinutes = 0;  // Décalage horaire pour la simulation
+    private long offsetMinutes = 0;
+
+    // NOUVEAU : Flag pour savoir si on est en mode validation
+    private boolean enModeValidation = false;
+    private String nomTacheValidee = "";
 
     // ── Composants UI ────────────────────────────────────────────────────────
     private Label labelHeure;
@@ -49,43 +49,33 @@ public class InterfaceLucienSimple extends Application {
     private Button btnOui;
     private Region bandeauCouleur;
 
-    // ── Initialisation ───────────────────────────────────────────────────────
     @Override
     public void start(Stage stage) {
-        // Initialisation des managers
         tacheManager = new TacheManager();
         historiqueManager = new HistoriqueManager();
 
-        // Démarrage du serveur dashboard
         dashboardServeur = new DashboardServeur(tacheManager, historiqueManager);
         dashboardServeur.demarrer();
 
-        // Construction de l'interface
         NodeUI ui = construireInterface();
         Scene scene = new Scene(ui.root, 700, 900);
 
-        // Configuration des raccourcis clavier
         configurerRaccourcisClavier(scene);
 
-        // Configuration de la scène
         stage.setTitle("MémoGuide – Lucien");
         stage.setScene(scene);
         stage.setFullScreen(true);
         stage.show();
 
-        // Démarrage de l'horloge
         demarrerHorloge();
     }
 
-    // ── Construction de l'interface ──────────────────────────────────────────
     private NodeUI construireInterface() {
-        // Bandeau couleur (indicateur d'urgence)
         bandeauCouleur = new Region();
         bandeauCouleur.setPrefHeight(10);
         bandeauCouleur.setMaxWidth(Double.MAX_VALUE);
         bandeauCouleur.setStyle("-fx-background-color: " + C_GRIS + ";");
 
-        // Heure
         labelHeure = new Label("00:00");
         labelHeure.setStyle(
                 "-fx-font-size: 72px;" +
@@ -95,35 +85,29 @@ public class InterfaceLucienSimple extends Application {
         );
         labelHeure.setAlignment(Pos.CENTER);
 
-        // Info décalage horaire
         labelOffsetInfo = new Label();
         labelOffsetInfo.setStyle("-fx-font-size: 16px; -fx-text-fill: " + C_SUBTIL + ";");
         labelOffsetInfo.setAlignment(Pos.CENTER);
         mettreAJourAffichageOffset();
 
-        // Nom de la tâche
         labelNomTache = creerLabel("Chargement…", 64, true, C_TEXTE);
         labelNomTache.setWrapText(true);
         labelNomTache.setMaxWidth(600);
         labelNomTache.setTextAlignment(TextAlignment.CENTER);
         labelNomTache.setAlignment(Pos.CENTER);
 
-        // Sous-info
         labelSousInfo = creerLabel("", 26, false, C_SUBTIL);
 
-        // Bouton OUI principal
         btnOui = new Button("OUI  ✓");
         btnOui.setPrefSize(420, 200);
         btnOui.setFocusTraversable(false);
         appliquerStyleBouton(btnOui, C_VERT);
         btnOui.setOnAction(e -> actionValidation());
 
-        // Zone centrale
         VBox centre = new VBox(20, labelHeure, labelOffsetInfo, labelNomTache, labelSousInfo, btnOui);
         centre.setAlignment(Pos.CENTER);
         VBox.setVgrow(centre, Priority.ALWAYS);
 
-        // Pied de page
         Label pied = creerLabel(
                 "Appuie sur le bouton quand tu as fait la tâche 😊\n\n" +
                         "← → : avancer/reculer de 15 min    ↑ : réinitialiser l'heure",
@@ -133,7 +117,7 @@ public class InterfaceLucienSimple extends Application {
         pied.setTextAlignment(TextAlignment.CENTER);
 
         // Barre des boutons (Valider et Aide)
-        Button btnValider = new Button("✓ Valider");
+        Button btnValider = new Button("✓ Oui");
         btnValider.setPrefSize(100, 50);
         btnValider.setFocusTraversable(false);
         appliquerStyleBouton(btnValider, C_VERT);
@@ -176,7 +160,6 @@ public class InterfaceLucienSimple extends Application {
                     break;
                 case LEFT:
                     offsetMinutes -= 15;
-                    if (offsetMinutes < 0) offsetMinutes = 0;
                     mettreAJourAffichageOffset();
                     mettreAJourTouteLInterface();
                     System.out.println("⏪ -15 min : décalage = " + offsetMinutes + " min");
@@ -209,7 +192,12 @@ public class InterfaceLucienSimple extends Application {
 
     // ── Horloge (mise à jour automatique) ────────────────────────────────────
     private void demarrerHorloge() {
-        Timeline horloge = new Timeline(new KeyFrame(Duration.seconds(1), e -> mettreAJourTouteLInterface()));
+        Timeline horloge = new Timeline(new KeyFrame(Duration.seconds(1), e -> {
+            // Ne pas mettre à jour si on est en mode validation
+            if (!enModeValidation) {
+                mettreAJourTouteLInterface();
+            }
+        }));
         horloge.setCycleCount(Timeline.INDEFINITE);
         horloge.play();
     }
@@ -225,35 +213,53 @@ public class InterfaceLucienSimple extends Application {
         if (active.isPresent()) {
             Tache t = active.get();
 
-            // Détection du changement de tâche pour le son d'activation
+            // Si la tâche est validée, on affiche l'état validé en vert
+            if (t.isEstValidee()) {
+                // Vérifier si on est toujours dans la période de cette tâche
+                if (now.isBefore(t.getHeureReset())) {
+                    // La tâche validée reste affichée en vert jusqu'à l'heure de reset
+                    if (!enModeValidation || !nomTacheValidee.equals(t.getNom())) {
+                        afficherEtatValide(t.getNom(), t.getHeureReset());
+                    }
+                    return;
+                } else {
+                    // L'heure de reset est passée, on sort du mode validation
+                    if (enModeValidation) {
+                        enModeValidation = false;
+                        nomTacheValidee = "";
+                    }
+                }
+            }
+
+            // Sortir du mode validation si on était dedans
+            if (enModeValidation) {
+                enModeValidation = false;
+                nomTacheValidee = "";
+            }
+
             boolean estNouvelleTache = (tacheEnCours == null || !tacheEnCours.getNom().equals(t.getNom()));
 
-            if (estNouvelleTache && !t.isEstValidee()) {
-                // Petite pause pour éviter le chevauchement
-                javafx.application.Platform.runLater(() -> {
-                    try {
-                        Thread.sleep(100);
-                    } catch (InterruptedException ignored) {}
-                    SonRappel.jouerSonActivation();
-                });
+            if (estNouvelleTache) {
+                SonRappel.jouerSonActivation();
                 System.out.println("🔊 Nouvelle tâche active: " + t.getNom());
             }
 
             tacheEnCours = t;
             labelNomTache.setText(t.getNom());
+            afficherEtatAFaire(t, now);
 
-            if (t.isEstValidee()) {
-                afficherEtatValide();
-            } else {
-                afficherEtatAFaire(t, now);
-
-                // Son de rappel (30 minutes) - éviter si c'est une nouvelle tâche
-                if (!estNouvelleTache && t.doitDeclenchemerRappel(now)) {
-                    SonRappel.jouerSonRappel();
-                    System.out.println("[🔔 RAPPEL] " + t.getNom());
-                }
+            if (t.doitDeclenchemerRappel(now)) {
+                SonRappel.jouerSonRappel();
+                System.out.println("[🔔 RAPPEL] " + t.getNom());
             }
+
         } else {
+            // Sortir du mode validation si on était dedans
+            if (enModeValidation) {
+                enModeValidation = false;
+                nomTacheValidee = "";
+            }
+
             tacheEnCours = null;
             labelNomTache.setText("Rien à faire\npour l'instant 😊");
             labelSousInfo.setText("Profite de ton temps libre !");
@@ -265,32 +271,66 @@ public class InterfaceLucienSimple extends Application {
     }
 
     // ── Affichage des états ──────────────────────────────────────────────────
-    private void afficherEtatValide() {
+    private void afficherEtatValide(String nomTache, LocalTime heureReset) {
+        enModeValidation = true;
+        nomTacheValidee = nomTache;
+
         btnOui.setText("✓  C'est fait !");
-        appliquerStyleBouton(btnOui, C_GRIS);
+        btnOui.setDisable(false);
+        appliquerStyleBouton(btnOui, C_VERT);
         bandeauCouleur.setStyle("-fx-background-color: " + C_VERT + ";");
         labelSousInfo.setText("Bravo Lucien ! 🎉");
         labelSousInfo.setStyle(styleLabel(C_VERT));
-        btnOui.setDisable(true);
+
+        // Garder le nom de la tâche validée affiché
+        labelNomTache.setText(nomTache);
+
+        // Calculer le temps restant jusqu'à l'heure de reset
+        LocalTime now = LocalTime.now().plusMinutes(offsetMinutes);
+        long minutesRestantes = java.time.temporal.ChronoUnit.MINUTES.between(now, heureReset);
+
+        if (minutesRestantes > 0) {
+            // Programmer la sortie du mode validation à l'heure de reset
+            Timeline sortieValidation = new Timeline(new KeyFrame(Duration.minutes(minutesRestantes), e -> {
+                enModeValidation = false;
+                nomTacheValidee = "";
+                // Forcer une mise à jour pour passer à la tâche suivante
+                mettreAJourTouteLInterface();
+            }));
+            sortieValidation.setCycleCount(1);
+            sortieValidation.play();
+            System.out.println("✅ Tâche validée, reste " + minutesRestantes + " min avant la prochaine tâche");
+        } else {
+            // Si on est déjà après l'heure de reset, passer directement
+            enModeValidation = false;
+            nomTacheValidee = "";
+            mettreAJourTouteLInterface();
+        }
     }
 
     private void afficherEtatAFaire(Tache t, LocalTime now) {
         btnOui.setText("OUI  ✓");
         btnOui.setDisable(false);
 
-        long minRestantes = java.time.temporal.ChronoUnit.MINUTES.between(now, t.getHeureReset());
+        long minutesEcoulees = java.time.temporal.ChronoUnit.MINUTES.between(t.getHeureDebut(), now);
+        long minutesRestantes = java.time.temporal.ChronoUnit.MINUTES.between(now, t.getHeureReset());
         String couleur;
         String info;
 
-        if (minRestantes <= 15) {
+        // Si la tâche a dépassé 30 minutes depuis son début -> ROUGE
+        if (minutesEcoulees >= 30 && !t.isEstValidee()) {
             couleur = C_ROUGE;
-            info = "⚠️ Urgent ! Encore " + minRestantes + " minutes";
-        } else if (minRestantes <= 45) {
+            info = " RAPPEL ! Tâche non faite depuis 30 minutes !";
+        }
+        // Si moins de 15 minutes restantes -> ROUGE aussi (urgence)
+        else if (minutesRestantes <= 15) {
+            couleur = C_ROUGE;
+            info = "⚠Urgent ! Encore " + minutesRestantes + " minutes";
+        }
+        // Sinon, tâche en cours -> ORANGE
+        else {
             couleur = C_ORANGE;
-            info = "🕐 Plus que " + minRestantes + " minutes";
-        } else {
-            couleur = C_VERT;
-            info = "🕐 " + t.getPlageHoraire();
+            info = " À faire : " + t.getPlageHoraire();
         }
 
         labelSousInfo.setText(info);
@@ -302,6 +342,10 @@ public class InterfaceLucienSimple extends Application {
     // ── Actions ──────────────────────────────────────────────────────────────
     private void actionValidation() {
         if (tacheEnCours == null || tacheEnCours.isEstValidee()) return;
+        if (enModeValidation) return;
+
+        String nomTache = tacheEnCours.getNom();
+        LocalTime heureReset = tacheEnCours.getHeureReset();  // Récupérer l'heure de reset
 
         tacheEnCours.valider();
 
@@ -309,16 +353,8 @@ public class InterfaceLucienSimple extends Application {
                 .between(tacheEnCours.getHeureDebut(), LocalTime.now().plusMinutes(offsetMinutes)) > 30;
         historiqueManager.enregistrerValidation(tacheEnCours, enRetard);
 
-        // Animation du bouton
-        ScaleTransition pulse = new ScaleTransition(Duration.millis(140), btnOui);
-        pulse.setFromX(1.0);
-        pulse.setFromY(1.0);
-        pulse.setToX(1.06);
-        pulse.setToY(1.06);
-        pulse.setAutoReverse(true);
-        pulse.setCycleCount(2);
-        pulse.setOnFinished(e -> afficherEtatValide());
-        pulse.play();
+        // Afficher l'état validé avec l'heure de reset
+        afficherEtatValide(nomTache, heureReset);
     }
 
     private void afficherAide() {
