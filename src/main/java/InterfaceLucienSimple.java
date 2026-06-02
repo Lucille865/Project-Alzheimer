@@ -34,6 +34,7 @@ public class InterfaceLucienSimple extends Application {
     private static final String C_ROUGE  = "#f85149";
     private static final String C_ORANGE = "#d29922";
     private static final String C_GRIS   = "#30363d";
+    private static final String C_BLEU   = "#388bfd";  // Ajout pour le bouton aide
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -48,7 +49,8 @@ public class InterfaceLucienSimple extends Application {
     private Label  labelNomTache;
     private Label  labelSousInfo;
     private Button btnOui;
-    private Region bandeauCouleur; // bande colorée en haut selon l'urgence
+    private Button btnAide;  // NOUVEAU : bouton d'aide
+    private Region bandeauCouleur;
 
     @Override
     public void start(Stage stage) {
@@ -59,17 +61,21 @@ public class InterfaceLucienSimple extends Application {
         dashboardServeur = new DashboardServeur(tacheManager, historiqueManager);
         dashboardServeur.demarrer();
 
-        // Ouvre automatiquement le navigateur
-        ouvrirDashboardDansNavigateur();
-
         // ── Bandeau couleur en haut (indicateur d'urgence) ────────────────
         bandeauCouleur = new Region();
         bandeauCouleur.setPrefHeight(10);
         bandeauCouleur.setMaxWidth(Double.MAX_VALUE);
         bandeauCouleur.setStyle("-fx-background-color: " + C_GRIS + ";");
 
-        // ── Heure ─────────────────────────────────────────────────────────
-        labelHeure = creerLabel("00:00", 40, false, C_SUBTIL);
+        // ── Heure (agrandie) ───────────────────────────────────────────────
+        labelHeure = new Label("00:00");
+        labelHeure.setStyle(
+                "-fx-font-size: 96px;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-text-fill: " + C_TEXTE + ";" +
+                        "-fx-font-family: 'Arial';"
+        );
+        labelHeure.setAlignment(Pos.CENTER);
 
         // ── Nom de la tâche ───────────────────────────────────────────────
         labelNomTache = creerLabel("Chargement…", 64, true, C_TEXTE);
@@ -85,11 +91,34 @@ public class InterfaceLucienSimple extends Application {
         btnOui = new Button("OUI  ✓");
         btnOui.setPrefSize(420, 200);
         stylesBouton(C_VERT);
-
         btnOui.setOnAction(e -> actionValidation());
 
+        // ── NOUVEAU : Bouton Aide ─────────────────────────────────────────
+        btnAide = new Button("❓ Aide");
+        btnAide.setPrefSize(100, 50);
+        btnAide.setStyle(
+                "-fx-background-color: " + C_BLEU + ";" +
+                        "-fx-background-radius: 12;" +
+                        "-fx-font-size: 18px;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-text-fill: white;" +
+                        "-fx-cursor: hand;"
+        );
+        btnAide.setOnAction(e -> afficherAide());
+
+        // ── Barre du haut avec heure et bouton aide ───────────────────────
+        HBox headerBar = new HBox();
+        headerBar.setAlignment(Pos.CENTER_RIGHT);
+        headerBar.setPadding(new Insets(20, 30, 0, 30));
+        headerBar.getChildren().add(btnAide);
+
+        // Conteneur pour l'heure centrée
+        VBox heureContainer = new VBox(labelHeure);
+        heureContainer.setAlignment(Pos.CENTER);
+        VBox.setVgrow(heureContainer, Priority.ALWAYS);
+
         // ── Zone centrale ─────────────────────────────────────────────────
-        VBox centre = new VBox(32, labelHeure, labelNomTache, labelSousInfo, btnOui);
+        VBox centre = new VBox(32, heureContainer, labelNomTache, labelSousInfo, btnOui);
         centre.setAlignment(Pos.CENTER);
         VBox.setVgrow(centre, Priority.ALWAYS);
 
@@ -101,7 +130,7 @@ public class InterfaceLucienSimple extends Application {
         pied.setPadding(new Insets(0, 0, 36, 0));
 
         // ── Racine ────────────────────────────────────────────────────────
-        VBox root = new VBox(bandeauCouleur, centre, pied);
+        VBox root = new VBox(bandeauCouleur, headerBar, centre, pied);
         root.setAlignment(Pos.CENTER);
         root.setStyle("-fx-background-color: " + C_FOND + ";");
         VBox.setVgrow(centre, Priority.ALWAYS);
@@ -113,6 +142,10 @@ public class InterfaceLucienSimple extends Application {
             if (event.getCode() == KeyCode.ENTER) {
                 if (!btnOui.isDisabled()) btnOui.fire();
             }
+            // Nouveau : touche F1 ou A pour ouvrir l'aide
+            if (event.getCode() == KeyCode.F1 || event.getCode() == KeyCode.A) {
+                afficherAide();
+            }
         });
 
         stage.setTitle("MémoGuide – Lucien");
@@ -121,6 +154,43 @@ public class InterfaceLucienSimple extends Application {
         stage.show();
 
         demarrerHorloge();
+    }
+
+    // ── NOUVELLE MÉTHODE : Afficher l'aide ───────────────────────────────────
+
+    private void afficherAide() {
+        Alert aide = new Alert(Alert.AlertType.INFORMATION);
+        aide.setTitle("Aide - MémoGuide");
+        aide.setHeaderText("📱 Comment utiliser MémoGuide ?");
+
+        // Texte avec des retours à la ligne explicites
+        String message =
+                "Bienvenue Lucien ! 🌟\n\n" +
+                        "MémoGuide t'aide à te souvenir des activités importantes de ta journée.\n\n" +
+                        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
+                        "📌 COMMENT ÇA MARCHE :\n\n" +
+                        "   • Une tâche s'affiche en grand au centre de l'écran\n" +
+                        "   • Quand tu as terminé la tâche, appuie sur le bouton OUI\n" +
+                        "   • Tu peux aussi utiliser la touche ENTREE du clavier\n\n" +
+                        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
+                        "⏰ LES RAPPELS :\n\n" +
+                        "   • La bande colorée en haut change selon l'urgence :\n" +
+                        "       - 🟢 VERT = tranquille, il reste du temps\n" +
+                        "       - 🟠 ORANGE = bientôt l'heure limite\n" +
+                        "       - 🔴 ROUGE = très urgent, plus que 15 minutes !\n" +
+                        "   • Un bip sonore te rappelle si tu as oublié après 30 minutes\n\n" +
+                        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
+                        "💡 CONSEIL :\n\n" +
+                        "   N'hésite pas à demander de l'aide à un proche si besoin !";
+
+        aide.setContentText(message);
+
+        // Agrandir la taille de l'alerte
+        aide.getDialogPane().setMinHeight(600);
+        aide.getDialogPane().setMinWidth(550);
+        aide.getDialogPane().setStyle("-fx-font-size: 13px;");
+
+        aide.showAndWait();
     }
 
     // ── Horloge ───────────────────────────────────────────────────────────────
@@ -222,7 +292,11 @@ public class InterfaceLucienSimple extends Application {
     }
 
     @Override
-    public void stop() {}
+    public void stop() {
+        if (dashboardServeur != null) {
+            dashboardServeur.arreter();
+        }
+    }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -251,16 +325,7 @@ public class InterfaceLucienSimple extends Application {
         return "-fx-font-size: 26px; -fx-text-fill: " + couleur + ";";
     }
 
-private void ouvrirDashboardDansNavigateur() {
-    System.out.println("🌐 Dashboard disponible sur http://localhost:8080");
-
-    // Affiche une alerte
-    Alert alert = new Alert(Alert.AlertType.INFORMATION);
-    alert.setTitle("Dashboard dans Navigateur");
-    alert.setHeaderText("Tableau de bord disponible");
-    alert.setContentText("Ouvrez votre navigateur web et allez à :\n\nhttp://localhost:8080\n\nLe dashboard se met à jour automatiquement.");
-    alert.showAndWait();
-}
-
-    public static void main(String[] args) { launch(args); }
+    public static void main(String[] args) {
+        launch(args);
+    }
 }
