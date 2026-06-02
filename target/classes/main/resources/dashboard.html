@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MémoGuide – Suivi de Lucien</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+    <style>
+        :root {
+          --bg:        #f5f0e8;
+          --surface:   #fffdf8;
+          --border:    #e2d9c8;
+          --text:      #1a1510;
+          --muted:     #7a6e5f;
+          --vert:      #2d7a4f;
+          --vert-light:#e8f5ee;
+          --orange:    #c45c1a;
+          --orange-light:#fdf0e6;
+          --rouge:     #b52a2a;
+          --rouge-light:#fdeaea;
+          --accent:    #3d5a80;
+          --bleu:      #388bfd;
+          --bleu-light:#e6f0ff;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+          font-family: 'DM Sans', sans-serif;
+          background: var(--bg);
+          color: var(--text);
+          min-height: 100vh;
+          padding: 0 0 60px;
+        }
+
+        /* ── En-tête ── */
+        header {
+          background: var(--surface);
+          border-bottom: 1px solid var(--border);
+          padding: 28px 40px 24px;
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 12px;
+        }
+
+        .header-title {
+          font-family: 'DM Serif Display', serif;
+          font-size: 2rem;
+          color: var(--text);
+          line-height: 1.1;
+        }
+
+        .header-title span {
+          font-style: italic;
+          color: var(--accent);
+        }
+
+        .header-sub {
+          font-size: 0.85rem;
+          color: var(--muted);
+          margin-top: 4px;
+        }
+
+        .refresh-info {
+          font-size: 0.78rem;
+          color: var(--muted);
+          background: var(--bg);
+          border: 1px solid var(--border);
+          border-radius: 20px;
+          padding: 6px 14px;
+          white-space: nowrap;
+        }
+
+        .refresh-dot {
+          display: inline-block;
+          width: 7px; height: 7px;
+          border-radius: 50%;
+          background: var(--vert);
+          margin-right: 6px;
+          animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50%       { opacity: 0.3; }
+        }
+
+        /* ── Onglets ── */
+        .tabs {
+          display: flex;
+          gap: 8px;
+          margin-bottom: 28px;
+          border-bottom: 1px solid var(--border);
+          padding-bottom: 12px;
+        }
+
+        .tab-btn {
+          background: transparent;
+          border: none;
+          padding: 10px 24px;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 0.9rem;
+          font-weight: 500;
+          color: var(--muted);
+          cursor: pointer;
+          border-radius: 30px;
+          transition: all 0.2s;
+        }
+
+        .tab-btn:hover {
+          background: var(--bg);
+          color: var(--text);
+        }
+
+        .tab-btn.active {
+          background: var(--accent);
+          color: white;
+        }
+
+        .tab-content {
+          display: none;
+        }
+
+        .tab-content.active {
+          display: block;
+        }
+
+        /* ── Layout ── */
+        main {
+          max-width: 900px;
+          margin: 0 auto;
+          padding: 36px 24px 0;
+          display: flex;
+          flex-direction: column;
+          gap: 28px;
+        }
+
+        /* ── Carte générique ── */
+        .card {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: 16px;
+          padding: 28px 30px;
+        }
+
+        .card-title {
+          font-family: 'DM Serif Display', serif;
+          font-size: 1.15rem;
+          margin-bottom: 20px;
+          color: var(--text);
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        /* ── Résumé du jour ── */
+        .resume-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+          gap: 14px;
+          margin-bottom: 24px;
+        }
+
+        .resume-stat {
+          background: var(--bg);
+          border: 1px solid var(--border);
+          border-radius: 12px;
+          padding: 16px 18px;
+          text-align: center;
+        }
+
+        .resume-stat .val {
+          font-family: 'DM Serif Display', serif;
+          font-size: 2.4rem;
+          line-height: 1;
+          color: var(--accent);
+        }
+
+        .resume-stat .lbl {
+          font-size: 0.78rem;
+          color: var(--muted);
+          margin-top: 4px;
+        }
+
+        /* Barre de progression */
+        .progress-wrap {
+          background: var(--border);
+          border-radius: 999px;
+          height: 10px;
+          overflow: hidden;
+        }
+
+        .progress-bar {
+          height: 100%;
+          border-radius: 999px;
+          background: linear-gradient(90deg, var(--vert), #4caf78);
+          transition: width 0.6s ease;
+        }
+
+        .progress-label {
+          font-size: 0.82rem;
+          color: var(--muted);
+          margin-top: 8px;
+          text-align: right;
+        }
+
+        /* ── Liste des tâches du jour ── */
+        .tache-item {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          padding: 14px 0;
+          border-bottom: 1px solid var(--border);
+        }
+
+        .tache-item:last-child { border-bottom: none; }
+
+        .tache-badge {
+          flex-shrink: 0;
+          width: 34px; height: 34px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1rem;
+        }
+
+        .badge-ok   { background: var(--vert-light);   color: var(--vert); }
+        .badge-todo { background: var(--bg);            color: var(--muted); border: 1px solid var(--border); }
+
+        .tache-info { flex: 1; }
+
+        .tache-nom {
+          font-size: 0.95rem;
+          font-weight: 500;
+          color: var(--text);
+        }
+
+        .tache-plage {
+          font-size: 0.78rem;
+          color: var(--muted);
+          margin-top: 2px;
+        }
+
+        .tache-statut {
+          font-size: 0.75rem;
+          font-weight: 600;
+          padding: 3px 10px;
+          border-radius: 20px;
+        }
+
+        .statut-ok     { background: var(--vert-light);   color: var(--vert); }
+        .statut-todo   { background: var(--bg);            color: var(--muted); border: 1px solid var(--border); }
+        .statut-retard { background: var(--orange-light);  color: var(--orange); }
+
+        /* ── Historique 7 jours ── */
+        .histo-grid {
+          display: grid;
+          grid-template-columns: repeat(7, 1fr);
+          gap: 8px;
+        }
+
+        .histo-jour {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .histo-bar-wrap {
+          width: 100%;
+          background: var(--bg);
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          height: 80px;
+          display: flex;
+          align-items: flex-end;
+          overflow: hidden;
+        }
+
+        .histo-bar {
+          width: 100%;
+          border-radius: 6px 6px 0 0;
+          background: linear-gradient(180deg, #4caf78, var(--vert));
+          transition: height 0.5s ease;
+        }
+
+        .histo-date {
+          font-size: 0.7rem;
+          color: var(--muted);
+          text-align: center;
+        }
+
+        .histo-count {
+          font-size: 0.75rem;
+          font-weight: 600;
+          color: var(--text);
+        }
+
+        .histo-retard {
+          font-size: 0.65rem;
+          color: var(--orange);
+        }
+
+        .histo-jour.today .histo-date { color: var(--accent); font-weight: 600; }
+        .histo-jour.today .histo-bar  { background: linear-gradient(180deg, #6b9fd4, var(--accent)); }
+
+        /* ── Événements du jour ── */
+        .evt-list {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        .evt-item {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          background: var(--bg);
+          border: 1px solid var(--border);
+          border-radius: 10px;
+          padding: 10px 14px;
+          font-size: 0.85rem;
+        }
+
+        .evt-heure { color: var(--muted); font-size: 0.78rem; min-width: 80px; }
+        .evt-nom   { flex: 1; font-weight: 500; }
+
+        .evt-ok    { border-left: 3px solid var(--vert); }
+        .evt-tard  { border-left: 3px solid var(--orange); }
+
+        .evt-tag {
+          font-size: 0.68rem;
+          padding: 2px 8px;
+          border-radius: 12px;
+          font-weight: 600;
+        }
+
+        .tag-ok   { background: var(--vert-light);  color: var(--vert); }
+        .tag-tard { background: var(--orange-light); color: var(--orange); }
+
+        /* ── Gestion des tâches (NOUVEAU) ── */
+        .form-group {
+          margin-bottom: 20px;
+        }
+        .form-group label {
+          display: block;
+          margin-bottom: 8px;
+          font-weight: 500;
+          color: var(--text);
+        }
+        .form-group input {
+          width: 100%;
+          padding: 12px 16px;
+          border: 1px solid var(--border);
+          border-radius: 12px;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 0.9rem;
+          background: var(--surface);
+        }
+        .form-group input:focus {
+          outline: none;
+          border-color: var(--accent);
+        }
+        .btn {
+          background: var(--accent);
+          color: white;
+          border: none;
+          padding: 12px 24px;
+          border-radius: 30px;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 0.9rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: opacity 0.2s;
+        }
+        .btn:hover {
+          opacity: 0.85;
+        }
+        .btn-danger {
+          background: var(--rouge);
+        }
+        .btn-warning {
+          background: var(--orange);
+        }
+        .btn-success {
+          background: var(--vert);
+        }
+        .message {
+          padding: 12px 16px;
+          border-radius: 12px;
+          margin-bottom: 20px;
+          display: none;
+        }
+        .message.success {
+          background: var(--vert-light);
+          color: var(--vert);
+          display: block;
+        }
+        .message.error {
+          background: var(--rouge-light);
+          color: var(--rouge);
+          display: block;
+        }
+        .tasks-table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+        .tasks-table th, .tasks-table td {
+          padding: 12px;
+          text-align: left;
+          border-bottom: 1px solid var(--border);
+        }
+        .tasks-table th {
+          color: var(--muted);
+          font-weight: 500;
+        }
+        .task-done {
+          opacity: 0.6;
+          text-decoration: line-through;
+        }
+        .edit-mode input {
+          padding: 6px 10px;
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          font-family: 'DM Sans', sans-serif;
+          width: 100px;
+        }
+        .action-buttons {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .small-btn {
+          padding: 4px 10px;
+          font-size: 0.75rem;
+          border-radius: 20px;
+          border: none;
+          cursor: pointer;
+          font-weight: 500;
+        }
+        .small-btn.edit {
+          background: var(--bleu-light);
+          color: var(--bleu);
+        }
+        .small-btn.delete {
+          background: var(--rouge-light);
+          color: var(--rouge);
+        }
+        .small-btn.save {
+          background: var(--vert-light);
+          color: var(--vert);
+        }
+        .small-btn.cancel {
+          background: var(--bg);
+          color: var(--muted);
+        }
+
+        /* ── Erreur / chargement ── */
+        .empty-state {
+          text-align: center;
+          color: var(--muted);
+          font-size: 0.9rem;
+          padding: 24px 0;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 600px) {
+          header { padding: 20px; }
+          main   { padding: 20px 14px 0; }
+          .card  { padding: 20px 16px; }
+          .resume-stat .val { font-size: 1.8rem; }
+          .histo-grid { grid-template-columns: repeat(7, 1fr); gap: 4px; }
+          .histo-bar-wrap { height: 60px; }
+          .action-buttons { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div>
+        <div class="header-title">Suivi de <span>Lucien</span></div>
+        <div class="header-sub">Tableau de bord famille · Mis à jour automatiquement</div>
+    </div>
+    <div class="refresh-info">
+        <span class="refresh-dot"></span>
+        Actualisation toutes les 10 s
+    </div>
+</header>
+
+<main>
+    <!-- Onglets -->
+    <div class="tabs">
+        <button class="tab-btn active" data-tab="dashboard">📊 Tableau de bord</button>
+        <button class="tab-btn" data-tab="list">📋 Liste des tâches</button>
+        <button class="tab-btn" data-tab="add">➕ Ajouter une tâche</button>
+    </div>
+
+    <!-- Onglet 1 : Dashboard existant (inchangé) -->
+    <div id="dashboard" class="tab-content active">
+        <!-- Résumé du jour -->
+        <div class="card" id="card-resume">
+            <div class="card-title">📅 Aujourd'hui — <span id="date-label">…</span></div>
+
+            <div class="resume-grid">
+                <div class="resume-stat">
+                    <div class="val" id="stat-validees">–</div>
+                    <div class="lbl">tâches faites</div>
+                </div>
+                <div class="resume-stat">
+                    <div class="val" id="stat-total">–</div>
+                    <div class="lbl">tâches au total</div>
+                </div>
+                <div class="resume-stat">
+                    <div class="val" id="stat-pct">–</div>
+                    <div class="lbl">% de réussite</div>
+                </div>
+            </div>
+
+            <div class="progress-wrap">
+                <div class="progress-bar" id="progress-bar" style="width:0%"></div>
+            </div>
+            <div class="progress-label" id="progress-label"></div>
+        </div>
+
+        <!-- Tâches du jour -->
+        <div class="card">
+            <div class="card-title">✅ Tâches de la journée</div>
+            <div id="liste-taches"><div class="empty-state">Chargement…</div></div>
+        </div>
+
+        <!-- Historique 7 jours -->
+        <div class="card">
+            <div class="card-title">📈 Historique des 7 derniers jours</div>
+            <div class="histo-grid" id="histo-grid"></div>
+        </div>
+
+        <!-- Événements validés aujourd'hui -->
+        <div class="card">
+            <div class="card-title">🕐 Validations d'aujourd'hui</div>
+            <div id="evt-list" class="evt-list"><div class="empty-state">Aucune validation pour l'instant.</div></div>
+        </div>
+    </div>
+
+    <!-- Onglet 2 : Liste des tâches (NOUVEAU) -->
+    <div id="list" class="tab-content">
+        <div class="card">
+            <div class="card-title">📋 Toutes les tâches</div>
+            <div id="messageList" class="message"></div>
+            <div style="overflow-x: auto;">
+                <table class="tasks-table" id="tasksTable">
+                    <thead>
+                    <tr><th>Nom</th><th>Horaire</th><th>Statut</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody id="tasksList"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Onglet 3 : Ajouter une tâche (NOUVEAU) -->
+    <div id="add" class="tab-content">
+        <div class="card">
+            <div class="card-title">➕ Ajouter une nouvelle tâche</div>
+            <div id="messageAdd" class="message"></div>
+            <form id="addForm">
+                <div class="form-group">
+                    <label>📌 Nom de la tâche</label>
+                    <input type="text" id="taskName" required placeholder="Ex: Prendre médicaments">
+                </div>
+                <div class="form-group">
+                    <label>⏰ Heure de début (HH:MM)</label>
+                    <input type="time" id="startTime" required>
+                </div>
+                <div class="form-group">
+                    <label>⏰ Heure limite (HH:MM)</label>
+                    <input type="time" id="endTime" required>
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-success">✅ Ajouter la tâche</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</main>
+
+<script>
+    const API = '/api/data';
+
+    function fmtDate(str) {
+      const [y, m, d] = str.split('-');
+      const noms = ['dim.','lun.','mar.','mer.','jeu.','ven.','sam.'];
+      const mois = ['jan','fév','mar','avr','mai','juin','juil','aoû','sep','oct','nov','déc'];
+      const date = new Date(y, m - 1, d);
+      return noms[date.getDay()] + ' ' + d + ' ' + mois[m - 1];
+    }
+
+    function fmtHeure(iso) {
+      return iso ? iso.slice(11, 16) : '';
+    }
+
+    // Gestion des onglets
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            btn.classList.add('active');
+            const tabId = btn.getAttribute('data-tab');
+            document.getElementById(tabId).classList.add('active');
+            if (tabId === 'list') chargerListeTaches();
+        });
+    });
+
+    // Fonction pour charger les données du dashboard (existant)
+    async function charger() {
+      let data;
+      try {
+        const r = await fetch(API);
+        data = await r.json();
+      } catch (e) {
+        document.getElementById('liste-taches').innerHTML =
+          '<div class="empty-state">⚠️ Impossible de contacter l\'application.<br>Vérifiez qu\'elle est bien lancée.</div>';
+        return;
+      }
+
+      const auj     = data.aujourd_hui;
+      const taches  = data.taches_du_jour  || [];
+      const histo7  = data.historique_7j   || [];
+      const evts    = auj.evenements        || [];
+
+      // ── Résumé ──
+      document.getElementById('date-label').textContent    = fmtDate(auj.date);
+      document.getElementById('stat-validees').textContent = auj.validees;
+      document.getElementById('stat-total').textContent    = auj.total;
+      document.getElementById('stat-pct').textContent      = auj.pourcentage + '%';
+      document.getElementById('progress-bar').style.width  = auj.pourcentage + '%';
+      document.getElementById('progress-label').textContent =
+        auj.validees + ' tâche' + (auj.validees > 1 ? 's' : '') + ' effectuée' +
+        (auj.validees > 1 ? 's' : '') + ' sur ' + auj.total;
+
+      // ── Tâches du jour ──
+      const listEl = document.getElementById('liste-taches');
+      if (!taches.length) {
+        listEl.innerHTML = '<div class="empty-state">Aucune tâche configurée.</div>';
+      } else {
+        const valideesTardMap = {};
+        evts.forEach(e => { if (e.enRetard) valideesTardMap[e.tache] = true; });
+
+        listEl.innerHTML = taches.map(t => {
+          const ok      = t.validee;
+          const retard  = ok && valideesTardMap[t.nom];
+          const badgeCls = ok ? 'badge-ok'   : 'badge-todo';
+          const icon     = ok ? '✓'           : '·';
+          let statutCls, statutTxt;
+          if (!ok) {
+            statutCls = 'statut-todo'; statutTxt = 'À faire';
+          } else if (retard) {
+            statutCls = 'statut-retard'; statutTxt = 'Fait (en retard)';
+          } else {
+            statutCls = 'statut-ok'; statutTxt = 'Fait ✓';
+          }
+          return `
+            <div class="tache-item">
+              <div class="tache-badge ${badgeCls}">${icon}</div>
+              <div class="tache-info">
+                <div class="tache-nom">${t.nom}</div>
+                <div class="tache-plage">${t.plage}</div>
+              </div>
+              <span class="tache-statut ${statutCls}">${statutTxt}</span>
+            </div>`;
+        }).join('');
+      }
+
+      // ── Historique 7 jours ──
+      const maxVal = Math.max(...histo7.map(j => j.validees), 1);
+      const histoEl = document.getElementById('histo-grid');
+      histoEl.innerHTML = histo7.map(j => {
+        const pct    = Math.round((j.validees / maxVal) * 100);
+        const isToday = j.date === auj.date;
+        return `
+          <div class="histo-jour ${isToday ? 'today' : ''}">
+            <div class="histo-count">${j.validees}</div>
+            <div class="histo-bar-wrap">
+              <div class="histo-bar" style="height:${pct}%"></div>
+            </div>
+            <div class="histo-date">${fmtDate(j.date).slice(0, 6)}</div>
+            ${j.retards ? `<div class="histo-retard">${j.retards} retard${j.retards > 1 ? 's' : ''}</div>` : ''}
+          </div>`;
+      }).join('');
+
+      // ── Événements du jour ──
+      const evtEl = document.getElementById('evt-list');
+      if (!evts.length) {
+        evtEl.innerHTML = '<div class="empty-state">Aucune validation enregistrée pour l\'instant.</div>';
+      } else {
+        evtEl.innerHTML = evts.map(e => `
+          <div class="evt-item ${e.enRetard ? 'evt-tard' : 'evt-ok'}">
+            <span class="evt-heure">${fmtHeure(e.horodatage)}</span>
+            <span class="evt-nom">${e.tache}</span>
+            <span class="evt-tag ${e.enRetard ? 'tag-tard' : 'tag-ok'}">
+              ${e.enRetard ? 'En retard' : 'À l\'heure'}
+            </span>
+          </div>`).join('');
+      }
+    }
+
+    // Charger la liste des tâches (pour l'onglet gestion)
+    let tasksList = [];
+
+    async function chargerListeTaches() {
+        try {
+            const response = await fetch('/api/data');
+            const data = await response.json();
+            tasksList = data.taches_du_jour || [];
+            afficherTableauTaches();
+        } catch (error) {
+            console.error('Erreur:', error);
+            document.getElementById('tasksList').innerHTML =
+                '<tr><td colspan="4" class="empty-state">Erreur de chargement</td></tr>';
+        }
+    }
+
+    function afficherTableauTaches() {
+        const tbody = document.getElementById('tasksList');
+        if (!tbody) return;
+
+        if (!tasksList.length) {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Aucune tâche configurée</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+
+        tasksList.forEach((tache, index) => {
+            const row = tbody.insertRow();
+            if (tache.validee) row.classList.add('task-done');
+
+            // Nom
+            const cellNom = row.insertCell(0);
+            if (tache.editMode) {
+                cellNom.innerHTML = `<input type="text" id="editNom_${index}" value="${escapeHtml(tache.nom)}" style="width:120px;">`;
+            } else {
+                cellNom.innerHTML = escapeHtml(tache.nom);
+            }
+
+            // Plage horaire
+            const cellPlage = row.insertCell(1);
+            if (tache.editMode) {
+                const parts = tache.plage.split(' – ');
+                const debut = parts[0] || '';
+                const fin = parts[1] || '';
+                cellPlage.innerHTML = `
+                    <input type="time" id="editDebut_${index}" value="${debut}" style="width:100px;">
+                    à
+                    <input type="time" id="editFin_${index}" value="${fin}" style="width:100px;">
+                `;
+            } else {
+                cellPlage.innerHTML = tache.plage;
+            }
+
+            // Statut
+            const cellStatut = row.insertCell(2);
+            cellStatut.innerHTML = tache.validee ? '✅ Fait' : '⏳ À faire';
+
+            // Actions
+            const cellActions = row.insertCell(3);
+            if (tache.editMode) {
+                cellActions.innerHTML = `
+                    <div class="action-buttons">
+                        <button class="small-btn save" onclick="sauvegarderModification(${index})">💾 Sauver</button>
+                        <button class="small-btn cancel" onclick="annulerModification(${index})">❌ Annuler</button>
+                    </div>
+                `;
+            } else {
+                cellActions.innerHTML = `
+                    <div class="action-buttons">
+                        <button class="small-btn edit" onclick="activerEdition(${index})">✏️ Modifier</button>
+                        <button class="small-btn delete" onclick="supprimerTache('${escapeHtml(tache.nom)}')">🗑️ Supprimer</button>
+                    </div>
+                `;
+            }
+        });
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+
+    function activerEdition(index) {
+        tasksList[index].editMode = true;
+        afficherTableauTaches();
+    }
+
+    function annulerModification(index) {
+        delete tasksList[index].editMode;
+        afficherTableauTaches();
+    }
+
+    async function sauvegarderModification(index) {
+        const nouveauNom = document.getElementById(`editNom_${index}`).value;
+        const debut = document.getElementById(`editDebut_${index}`).value;
+        const fin = document.getElementById(`editFin_${index}`).value;
+
+        try {
+            const response = await fetch('/api/modifier', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ancienNom: tasksList[index].nom,
+                    nouveauNom: nouveauNom,
+                    debut: debut,
+                    reset: fin
+                })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                delete tasksList[index].editMode;
+                showMessage('list', '✅ Tâche modifiée avec succès', 'success');
+                chargerListeTaches();
+                charger(); // Rafraîchir le dashboard
+            } else {
+                showMessage('list', '❌ Erreur lors de la modification', 'error');
+            }
+        } catch (error) {
+            showMessage('list', '❌ Erreur réseau', 'error');
+        }
+    }
+
+    async function supprimerTache(nom) {
+        if (!confirm(`Supprimer la tâche "${nom}" ?`)) return;
+
+        try {
+            const response = await fetch('/api/supprimer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nom: nom })
+            });
+
+            if (response.ok) {
+                showMessage('list', '🗑️ Tâche supprimée', 'success');
+                chargerListeTaches();
+                charger(); // Rafraîchir le dashboard
+            } else {
+                showMessage('list', '❌ Erreur lors de la suppression', 'error');
+            }
+        } catch (error) {
+            showMessage('list', '❌ Erreur réseau', 'error');
+        }
+    }
+
+    // Ajout d'une tâche
+    document.getElementById('addForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const nom = document.getElementById('taskName').value;
+        const debut = document.getElementById('startTime').value;
+        const reset = document.getElementById('endTime').value;
+
+        if (!nom || !debut || !reset) {
+            showMessage('add', '❌ Veuillez remplir tous les champs', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/taches', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nom: nom, debut: debut, reset: reset })
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                showMessage('add', '✅ Tâche ajoutée avec succès !', 'success');
+                document.getElementById('addForm').reset();
+                chargerListeTaches();
+                charger(); // Rafraîchir le dashboard
+                // Optionnel : basculer vers l'onglet liste
+                setTimeout(() => {
+                    document.querySelector('.tab-btn[data-tab="list"]').click();
+                }, 1500);
+            } else {
+                showMessage('add', '❌ ' + (result.message || 'Erreur lors de l\'ajout'), 'error');
+            }
+        } catch (error) {
+            showMessage('add', '❌ Erreur réseau', 'error');
+        }
+    });
+
+    function showMessage(tab, message, type) {
+        const msgDiv = document.getElementById(`message${tab === 'list' ? 'List' : 'Add'}`);
+        if (msgDiv) {
+            msgDiv.textContent = message;
+            msgDiv.className = `message ${type}`;
+            setTimeout(() => {
+                msgDiv.style.display = 'none';
+                msgDiv.className = 'message';
+            }, 3000);
+        }
+    }
+
+    // Lancement
+    charger();
+    setInterval(charger, 10000);
+    setInterval(() => {
+        if (document.getElementById('list').classList.contains('active')) {
+            chargerListeTaches();
+        }
+    }, 5000);
+</script>
+</body>
+</html>
