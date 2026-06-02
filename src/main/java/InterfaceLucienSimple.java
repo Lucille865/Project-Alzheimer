@@ -445,18 +445,23 @@ public class InterfaceLucienSimple extends Application {
 
     private void lancerServeurWiFi() {
         try {
-            // Le port 8082 est réservé à l'Arduino (le 8080 ou 8081 est pour le Dashboard)
             serveurWiFi = HttpServer.create(new InetSocketAddress(8082), 0);
             serveurWiFi.createContext("/bouton", exchange -> {
                 String query = exchange.getRequestURI().getQuery();
 
-                if (query != null && query.contains("action=valider")) {
-                    // Platform.runLater est obligatoire pour interagir avec l'interface JavaFX depuis le réseau
-                    Platform.runLater(this::actionValidation);
-                    System.out.println("[WIFI] Validation reçue du bouton physique !");
+                if (query != null) {
+                    if (query.contains("action=valider")) {
+                        Platform.runLater(this::actionValidation);
+                        System.out.println("[WIFI] Validation reçue du bouton physique !");
+                    }
+                    // --- NOUVEAU : DETECTION DU BOUTON AIDE ---
+                    else if (query.contains("action=aide")) {
+                        Platform.runLater(this::afficherAide);
+                        System.out.println("[WIFI] Demande d'aide reçue du bouton physique !");
+                    }
                 }
 
-                // Réponse lue par l'Arduino pour allumer ses LEDs (V = Vert, R = Rouge, X = Éteint)
+                // Réponse standard pour les LEDs de l'Arduino
                 String signal = "X";
                 if (tacheEnCours != null) {
                     signal = tacheEnCours.isEstValidee() ? "V" : "R";
@@ -469,7 +474,7 @@ public class InterfaceLucienSimple extends Application {
             });
             serveurWiFi.setExecutor(null);
             serveurWiFi.start();
-            System.out.println("[SERVEUR] Wi-Fi Arduino actif sur le port 8082");
+            System.out.println("[SERVEUR] Wi-Fi Arduino actif sur le port 8082 (Boutons: Valider & Aide)");
         } catch (IOException e) {
             System.err.println("[SERVEUR] Erreur Wi-Fi : " + e.getMessage());
         }
