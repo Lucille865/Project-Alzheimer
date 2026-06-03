@@ -56,7 +56,7 @@
 
 ### 1. Cloner le projet
 ```bash
-git clone https://github.com/votre-compte/MemoGuide.git
+git clone https://github.com/Lucille865/Project-Alzheimer.git
 cd MemoGuide
 ```
 
