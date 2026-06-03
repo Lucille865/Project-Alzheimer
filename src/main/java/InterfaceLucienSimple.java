@@ -361,7 +361,7 @@ public class InterfaceLucienSimple extends Application {
     }
 
     private void afficherAide() {
-        Alert aide = new Alert(Alert.AlertType.INFORMATION);
+        /*Alert aide = new Alert(Alert.AlertType.INFORMATION);
         aide.setTitle("Aide - MémoGuide");
         aide.setHeaderText("📱 Comment utiliser MémoGuide ?");
 
@@ -388,8 +388,9 @@ public class InterfaceLucienSimple extends Application {
         aide.getDialogPane().setMinHeight(600);
         aide.getDialogPane().setMinWidth(550);
         aide.getDialogPane().setStyle("-fx-font-size: 13px;");
+        aide.showAndWait();*/
         SonRappel.jouerSonAide();
-        aide.showAndWait();
+
     }
 
     // ── Méthodes utilitaires ─────────────────────────────────────────────────
