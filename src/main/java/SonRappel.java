@@ -24,17 +24,17 @@ public class SonRappel {
     private static void chargerSons() {
         try {
             // Son d'activation (quand une tâche devient active)
-            URL urlActivation = SonRappel.class.getResource("/sounds/Audio-petite-fille-1.wav");
+            URL urlActivation = SonRappel.class.getResource("/sounds/annonce.wav");
             sonActivation = new AudioClip(urlActivation.toString());
             System.out.println("✅ Son d'activation chargé");
 
             // Son de rappel (30 minutes)
-            URL urlRappel = SonRappel.class.getResource("/sounds/Audio-petite-fille-2.wav");
+            URL urlRappel = SonRappel.class.getResource("/sounds/rappel.wav");
             sonRappel = new AudioClip(urlRappel.toString());
             System.out.println("✅ Son de rappel chargé");
 
             // Son d'aide
-            URL urlAide = SonRappel.class.getResource("/sounds/Audio-aide.wav");
+            URL urlAide = SonRappel.class.getResource("/sounds/aide.wav");
             sonAide = new AudioClip(urlAide.toString());
             System.out.println("✅ Son d'aide chargé");
 
