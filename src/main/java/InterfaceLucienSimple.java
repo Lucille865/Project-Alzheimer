@@ -45,7 +45,7 @@ public class InterfaceLucienSimple extends Application {
 
     private HttpServer serveurWiFi;
 
-    // NOUVEAU : Flag pour savoir si on est en mode validation
+    // Flag pour savoir si on est en mode validation
     private boolean enModeValidation = false;
     private String nomTacheValidee = "";
 
@@ -220,46 +220,53 @@ public class InterfaceLucienSimple extends Application {
         tacheManager.mettreAJour(now);
         Optional<Tache> active = tacheManager.getTacheActive(now);
 
-        if (tacheEnCours != null && tacheEnCours.isEstValidee()) {
+        // Cas 1 : Une tâche est actuellement en mode validation (déjà validée)
+        if (enModeValidation && tacheEnCours != null && tacheEnCours.isEstValidee()) {
             if (now.isBefore(tacheEnCours.getHeureReset())) {
-                // On force le maintien de l'affichage vert, peu importe ce que dit le manager
+                // Reste en mode validation tant que l'heure de reset n'est pas dépassée
                 afficherEtatValide(tacheEnCours.getNom(), tacheEnCours.getHeureReset());
                 return;
             } else {
-                // L'heure de reset est dépassée ! On nettoie le mode validation
+                // L'heure de reset est dépassée, on sort du mode validation
                 enModeValidation = false;
                 nomTacheValidee = "";
                 tacheEnCours = null;
             }
         }
 
+        // Cas 2 : Une tâche active est présente (non validée ou nouvelle)
         if (active.isPresent()) {
             Tache t = active.get();
 
+            // Si cette tâche est déjà validée ET qu'on est encore dans son créneau
             if (t.isEstValidee() && now.isBefore(t.getHeureReset())) {
                 tacheEnCours = t;
                 afficherEtatValide(t.getNom(), t.getHeureReset());
                 return;
             }
 
+            // Détection nouvelle tâche (pour le son)
             boolean estNouvelleTache = (tacheEnCours == null || !tacheEnCours.getNom().equals(t.getNom()));
-
-            if (estNouvelleTache) {
+            if (estNouvelleTache && !t.isEstValidee()) {
                 SonRappel.jouerSonActivation();
                 System.out.println("🔊 Nouvelle tâche active: " + t.getNom());
             }
 
+            // Mise à jour de la tâche courante
             tacheEnCours = t;
             labelNomTache.setText(t.getNom());
-            afficherEtatAFaire(t, now);
 
+            // Affichage selon l'état (TOUJOURS réactiver le bouton ici)
+            afficherEtatAFaire(t, now);  // Cette méthode doit réactiver btnOui
+
+            // Son de rappel 30 minutes
             if (t.doitDeclenchemerRappel(now)) {
                 SonRappel.jouerSonRappel();
                 System.out.println("[🔔 RAPPEL] " + t.getNom());
             }
 
         } else {
-            // Sortir du mode validation si on était dedans
+            // Cas 3 : Aucune tâche active
             tacheEnCours = null;
             enModeValidation = false;
             nomTacheValidee = "";
@@ -269,7 +276,7 @@ public class InterfaceLucienSimple extends Application {
             labelSousInfo.setStyle(styleLabel(C_SUBTIL));
             appliquerStyleBouton(btnOui, C_GRIS);
             bandeauCouleur.setStyle("-fx-background-color: " + C_GRIS + ";");
-            btnOui.setDisable(true);
+            btnOui.setDisable(false);
         }
     }
 

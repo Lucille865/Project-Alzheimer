@@ -47,6 +47,8 @@ public class Tache {
      * Marque rappelDeclenche pour ne déclencher l'alerte qu'une seule fois.
      */
     public boolean doitDeclenchemerRappel(LocalTime maintenant) {
+        // Cette méthode ne fait que retourner true/false
+        // Elle ne doit PAS modifier l'état du bouton ou bloquer la validation
         if (!estValidee
                 && estActive(maintenant)
                 && maintenant.isAfter(heureDebut.plusMinutes(30))
